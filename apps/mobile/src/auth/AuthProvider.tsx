@@ -79,7 +79,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
       } catch (error) {
         if (!cancelled) {
-          const detail = error instanceof Error ? error.message : t('unknownSignInError');
+          const detail = error instanceof Error && error.message.startsWith('Bloom API request failed')
+            ? t('requestFailed')
+            : error instanceof Error ? error.message : t('unknownSignInError');
           setError(`${t('sessionStartFailed')}: ${detail}`);
         }
       } finally {

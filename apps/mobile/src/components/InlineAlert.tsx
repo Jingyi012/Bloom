@@ -9,10 +9,11 @@ export function InlineAlert({ message, onDismiss, variant = 'error' }: { message
   const isSuccess = variant === 'success';
   const { t } = useSettings();
   const iconColor = isSuccess ? '#2F6B52' : '#B42318';
+  const displayMessage = message.startsWith('Bloom API request failed') ? t('requestFailed') : message;
   return (
     <View accessibilityRole="alert" style={[styles.container, isSuccess ? styles.successContainer : null]}>
       <MaterialCommunityIcons color={iconColor} name={isSuccess ? 'check-circle-outline' : 'alert-circle-outline'} size={20} />
-      <Text style={[styles.message, isSuccess ? styles.successMessage : null]}>{message}</Text>
+      <Text style={[styles.message, isSuccess ? styles.successMessage : null]}>{displayMessage}</Text>
       <Pressable accessibilityLabel={t(isSuccess ? 'dismissNotice' : 'dismissError')} hitSlop={8} onPress={onDismiss} style={styles.close}>
         <MaterialCommunityIcons color={iconColor} name="close" size={18} />
       </Pressable>
