@@ -11,7 +11,7 @@ internal static class AuditableEntityConfiguration
     public static void Configure<TEntity>(this EntityTypeBuilder<TEntity> builder, string tableName)
         where TEntity : AuditableEntity
     {
-        builder.ToTable(tableName, "bloom");
+        builder.ToTable(tableName);
         builder.HasKey(entity => entity.Id);
         builder.Property(entity => entity.Id).ValueGeneratedNever();
         builder.Property(entity => entity.CreatedAtUtc).IsRequired();

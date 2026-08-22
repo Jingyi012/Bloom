@@ -9,10 +9,10 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Bloom.Infrastructure.Persistence.Migrations
+namespace Bloom.Infrastructure.Migrations
 {
     [DbContext(typeof(BloomDbContext))]
-    [Migration("20260822191418_InitialCreate")]
+    [Migration("20260822192804_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -82,7 +82,7 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DeletedAtUtc");
 
-                    b.ToTable("Circle", "bloom");
+                    b.ToTable("Circle", (string)null);
                 });
 
             modelBuilder.Entity("Bloom.Domain.Circles.CircleInvitation", b =>
@@ -132,7 +132,7 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CircleId", "InviteeUserId", "Status");
 
-                    b.ToTable("CircleInvitation", "bloom");
+                    b.ToTable("CircleInvitation", (string)null);
                 });
 
             modelBuilder.Entity("Bloom.Domain.Circles.CircleMember", b =>
@@ -184,7 +184,7 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserId", "LeftAtUtc");
 
-                    b.ToTable("CircleMember", "bloom");
+                    b.ToTable("CircleMember", (string)null);
                 });
 
             modelBuilder.Entity("Bloom.Domain.Entries.Comment", b =>
@@ -232,7 +232,7 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("EntryPublicationId", "CreatedAtUtc");
 
-                    b.ToTable("Comment", "bloom");
+                    b.ToTable("Comment", (string)null);
                 });
 
             modelBuilder.Entity("Bloom.Domain.Entries.DiaryEntry", b =>
@@ -294,7 +294,7 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     b.HasIndex("AuthorUserId", "ClientEntryId")
                         .IsUnique();
 
-                    b.ToTable("DiaryEntry", "bloom");
+                    b.ToTable("DiaryEntry", (string)null);
                 });
 
             modelBuilder.Entity("Bloom.Domain.Entries.EntryMedia", b =>
@@ -338,7 +338,7 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     b.HasIndex("EntryPublicationId", "SortOrder")
                         .IsUnique();
 
-                    b.ToTable("EntryMedia", "bloom");
+                    b.ToTable("EntryMedia", (string)null);
                 });
 
             modelBuilder.Entity("Bloom.Domain.Entries.EntryPublication", b =>
@@ -397,7 +397,7 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     b.HasIndex("CircleId", "AuthorUserId", "AuthorLocalDate")
                         .IsUnique();
 
-                    b.ToTable("EntryPublication", "bloom");
+                    b.ToTable("EntryPublication", (string)null);
                 });
 
             modelBuilder.Entity("Bloom.Domain.Entries.MediaAsset", b =>
@@ -453,7 +453,7 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     b.HasIndex("RelativePath")
                         .IsUnique();
 
-                    b.ToTable("MediaAsset", "bloom");
+                    b.ToTable("MediaAsset", (string)null);
                 });
 
             modelBuilder.Entity("Bloom.Domain.Entries.Reaction", b =>
@@ -499,7 +499,7 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     b.HasIndex("EntryPublicationId", "UserId", "EmojiCode")
                         .IsUnique();
 
-                    b.ToTable("Reaction", "bloom");
+                    b.ToTable("Reaction", (string)null);
                 });
 
             modelBuilder.Entity("Bloom.Domain.Identity.User", b =>
@@ -567,7 +567,7 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     b.HasIndex("GoogleSubject")
                         .IsUnique();
 
-                    b.ToTable("User", "bloom");
+                    b.ToTable("User", (string)null);
                 });
 
             modelBuilder.Entity("Bloom.Domain.Identity.UserSession", b =>
@@ -616,7 +616,7 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserId", "ExpiresAtUtc");
 
-                    b.ToTable("UserSession", "bloom");
+                    b.ToTable("UserSession", (string)null);
                 });
 
             modelBuilder.Entity("Bloom.Domain.Circles.Circle", b =>

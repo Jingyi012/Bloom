@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Bloom.Infrastructure.Persistence.Migrations
+namespace Bloom.Infrastructure.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration
@@ -11,12 +11,8 @@ namespace Bloom.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.EnsureSchema(
-                name: "bloom");
-
             migrationBuilder.CreateTable(
                 name: "User",
-                schema: "bloom",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -41,7 +37,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "Circle",
-                schema: "bloom",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -64,7 +59,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_Circle_User_CreatorUserId",
                         column: x => x.CreatorUserId,
-                        principalSchema: "bloom",
                         principalTable: "User",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
@@ -72,7 +66,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "DiaryEntry",
-                schema: "bloom",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -96,7 +89,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_DiaryEntry_User_AuthorUserId",
                         column: x => x.AuthorUserId,
-                        principalSchema: "bloom",
                         principalTable: "User",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
@@ -104,7 +96,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "MediaAsset",
-                schema: "bloom",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -126,7 +117,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_MediaAsset_User_OwnerUserId",
                         column: x => x.OwnerUserId,
-                        principalSchema: "bloom",
                         principalTable: "User",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
@@ -134,7 +124,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "UserSession",
-                schema: "bloom",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -155,7 +144,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_UserSession_User_UserId",
                         column: x => x.UserId,
-                        principalSchema: "bloom",
                         principalTable: "User",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
@@ -163,7 +151,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "CircleInvitation",
-                schema: "bloom",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -184,21 +171,18 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_CircleInvitation_Circle_CircleId",
                         column: x => x.CircleId,
-                        principalSchema: "bloom",
                         principalTable: "Circle",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_CircleInvitation_User_InviteeUserId",
                         column: x => x.InviteeUserId,
-                        principalSchema: "bloom",
                         principalTable: "User",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_CircleInvitation_User_InviterUserId",
                         column: x => x.InviterUserId,
-                        principalSchema: "bloom",
                         principalTable: "User",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
@@ -206,7 +190,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "CircleMember",
-                schema: "bloom",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -228,14 +211,12 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_CircleMember_Circle_CircleId",
                         column: x => x.CircleId,
-                        principalSchema: "bloom",
                         principalTable: "Circle",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_CircleMember_User_UserId",
                         column: x => x.UserId,
-                        principalSchema: "bloom",
                         principalTable: "User",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
@@ -243,7 +224,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "EntryPublication",
-                schema: "bloom",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -266,21 +246,18 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_EntryPublication_Circle_CircleId",
                         column: x => x.CircleId,
-                        principalSchema: "bloom",
                         principalTable: "Circle",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_EntryPublication_DiaryEntry_DiaryEntryId",
                         column: x => x.DiaryEntryId,
-                        principalSchema: "bloom",
                         principalTable: "DiaryEntry",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_EntryPublication_User_AuthorUserId",
                         column: x => x.AuthorUserId,
-                        principalSchema: "bloom",
                         principalTable: "User",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
@@ -288,7 +265,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "Comment",
-                schema: "bloom",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -309,14 +285,12 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_Comment_EntryPublication_EntryPublicationId",
                         column: x => x.EntryPublicationId,
-                        principalSchema: "bloom",
                         principalTable: "EntryPublication",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_Comment_User_AuthorUserId",
                         column: x => x.AuthorUserId,
-                        principalSchema: "bloom",
                         principalTable: "User",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
@@ -324,7 +298,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "EntryMedia",
-                schema: "bloom",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -344,14 +317,12 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_EntryMedia_EntryPublication_EntryPublicationId",
                         column: x => x.EntryPublicationId,
-                        principalSchema: "bloom",
                         principalTable: "EntryPublication",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_EntryMedia_MediaAsset_MediaAssetId",
                         column: x => x.MediaAssetId,
-                        principalSchema: "bloom",
                         principalTable: "MediaAsset",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
@@ -359,7 +330,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateTable(
                 name: "Reaction",
-                schema: "bloom",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -379,7 +349,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     table.ForeignKey(
                         name: "FK_Reaction_EntryPublication_EntryPublicationId",
                         column: x => x.EntryPublicationId,
-                        principalSchema: "bloom",
                         principalTable: "EntryPublication",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
@@ -387,220 +356,185 @@ namespace Bloom.Infrastructure.Persistence.Migrations
 
             migrationBuilder.CreateIndex(
                 name: "IX_Circle_BloomAtUtc",
-                schema: "bloom",
                 table: "Circle",
                 column: "BloomAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Circle_CreatorUserId",
-                schema: "bloom",
                 table: "Circle",
                 column: "CreatorUserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Circle_DeletedAtUtc",
-                schema: "bloom",
                 table: "Circle",
                 column: "DeletedAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_CircleInvitation_CircleId_InviteeUserId_Status",
-                schema: "bloom",
                 table: "CircleInvitation",
                 columns: new[] { "CircleId", "InviteeUserId", "Status" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_CircleInvitation_DeletedAtUtc",
-                schema: "bloom",
                 table: "CircleInvitation",
                 column: "DeletedAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_CircleInvitation_InviteeUserId_Status",
-                schema: "bloom",
                 table: "CircleInvitation",
                 columns: new[] { "InviteeUserId", "Status" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_CircleInvitation_InviterUserId",
-                schema: "bloom",
                 table: "CircleInvitation",
                 column: "InviterUserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_CircleMember_CircleId_UserId",
-                schema: "bloom",
                 table: "CircleMember",
                 columns: new[] { "CircleId", "UserId" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_CircleMember_DeletedAtUtc",
-                schema: "bloom",
                 table: "CircleMember",
                 column: "DeletedAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_CircleMember_UserId_LeftAtUtc",
-                schema: "bloom",
                 table: "CircleMember",
                 columns: new[] { "UserId", "LeftAtUtc" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Comment_AuthorUserId",
-                schema: "bloom",
                 table: "Comment",
                 column: "AuthorUserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Comment_DeletedAtUtc",
-                schema: "bloom",
                 table: "Comment",
                 column: "DeletedAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Comment_EntryPublicationId_CreatedAtUtc",
-                schema: "bloom",
                 table: "Comment",
                 columns: new[] { "EntryPublicationId", "CreatedAtUtc" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_DiaryEntry_AuthorUserId_ClientEntryId",
-                schema: "bloom",
                 table: "DiaryEntry",
                 columns: new[] { "AuthorUserId", "ClientEntryId" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_DiaryEntry_DeletedAtUtc",
-                schema: "bloom",
                 table: "DiaryEntry",
                 column: "DeletedAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_EntryMedia_DeletedAtUtc",
-                schema: "bloom",
                 table: "EntryMedia",
                 column: "DeletedAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_EntryMedia_EntryPublicationId_SortOrder",
-                schema: "bloom",
                 table: "EntryMedia",
                 columns: new[] { "EntryPublicationId", "SortOrder" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_EntryMedia_MediaAssetId",
-                schema: "bloom",
                 table: "EntryMedia",
                 column: "MediaAssetId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_EntryPublication_AuthorUserId",
-                schema: "bloom",
                 table: "EntryPublication",
                 column: "AuthorUserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_EntryPublication_CircleId_AuthorLocalDate_SubmittedAtUtc",
-                schema: "bloom",
                 table: "EntryPublication",
                 columns: new[] { "CircleId", "AuthorLocalDate", "SubmittedAtUtc" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_EntryPublication_CircleId_AuthorUserId_AuthorLocalDate",
-                schema: "bloom",
                 table: "EntryPublication",
                 columns: new[] { "CircleId", "AuthorUserId", "AuthorLocalDate" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_EntryPublication_DeletedAtUtc",
-                schema: "bloom",
                 table: "EntryPublication",
                 column: "DeletedAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_EntryPublication_DiaryEntryId",
-                schema: "bloom",
                 table: "EntryPublication",
                 column: "DiaryEntryId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_MediaAsset_DeletedAtUtc",
-                schema: "bloom",
                 table: "MediaAsset",
                 column: "DeletedAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_MediaAsset_OwnerUserId",
-                schema: "bloom",
                 table: "MediaAsset",
                 column: "OwnerUserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_MediaAsset_RelativePath",
-                schema: "bloom",
                 table: "MediaAsset",
                 column: "RelativePath",
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Reaction_DeletedAtUtc",
-                schema: "bloom",
                 table: "Reaction",
                 column: "DeletedAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Reaction_EntryPublicationId_CreatedAtUtc",
-                schema: "bloom",
                 table: "Reaction",
                 columns: new[] { "EntryPublicationId", "CreatedAtUtc" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Reaction_EntryPublicationId_UserId_EmojiCode",
-                schema: "bloom",
                 table: "Reaction",
                 columns: new[] { "EntryPublicationId", "UserId", "EmojiCode" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_User_DeletedAtUtc",
-                schema: "bloom",
                 table: "User",
                 column: "DeletedAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_User_EmailNormalized",
-                schema: "bloom",
                 table: "User",
                 column: "EmailNormalized",
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_User_GoogleSubject",
-                schema: "bloom",
                 table: "User",
                 column: "GoogleSubject",
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserSession_DeletedAtUtc",
-                schema: "bloom",
                 table: "UserSession",
                 column: "DeletedAtUtc");
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserSession_RefreshTokenHash",
-                schema: "bloom",
                 table: "UserSession",
                 column: "RefreshTokenHash",
                 unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserSession_UserId_ExpiresAtUtc",
-                schema: "bloom",
                 table: "UserSession",
                 columns: new[] { "UserId", "ExpiresAtUtc" });
         }
@@ -609,48 +543,37 @@ namespace Bloom.Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "CircleInvitation",
-                schema: "bloom");
+                name: "CircleInvitation");
 
             migrationBuilder.DropTable(
-                name: "CircleMember",
-                schema: "bloom");
+                name: "CircleMember");
 
             migrationBuilder.DropTable(
-                name: "Comment",
-                schema: "bloom");
+                name: "Comment");
 
             migrationBuilder.DropTable(
-                name: "EntryMedia",
-                schema: "bloom");
+                name: "EntryMedia");
 
             migrationBuilder.DropTable(
-                name: "Reaction",
-                schema: "bloom");
+                name: "Reaction");
 
             migrationBuilder.DropTable(
-                name: "UserSession",
-                schema: "bloom");
+                name: "UserSession");
 
             migrationBuilder.DropTable(
-                name: "MediaAsset",
-                schema: "bloom");
+                name: "MediaAsset");
 
             migrationBuilder.DropTable(
-                name: "EntryPublication",
-                schema: "bloom");
+                name: "EntryPublication");
 
             migrationBuilder.DropTable(
-                name: "Circle",
-                schema: "bloom");
+                name: "Circle");
 
             migrationBuilder.DropTable(
-                name: "DiaryEntry",
-                schema: "bloom");
+                name: "DiaryEntry");
 
             migrationBuilder.DropTable(
-                name: "User",
-                schema: "bloom");
+                name: "User");
         }
     }
 }
