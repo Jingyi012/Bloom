@@ -7,3 +7,9 @@ public sealed record CurrentUserResponse(
     string Email,
     string? AvatarUrl,
     string TimeZoneId);
+
+/// <summary>Request to update safe profile fields.</summary>
+public sealed record UpdateProfileRequest(string DisplayName, string TimeZoneId);
+
+/// <summary>Profile statistics that do not reveal sealed content.</summary>
+public sealed record UserStatsResponse(int TotalEntries, int ActiveCircles, int BloomedCircles, int CurrentStreak);

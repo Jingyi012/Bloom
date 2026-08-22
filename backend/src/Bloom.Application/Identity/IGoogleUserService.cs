@@ -22,4 +22,16 @@ public interface IGoogleUserService
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The matching user, or null when no user exists.</returns>
     Task<User?> FindByEmailAsync(string email, CancellationToken cancellationToken);
+
+    /// <summary>Updates user-editable profile fields.</summary>
+    Task<User?> UpdateProfileAsync(Guid userId, string displayName, string timeZoneId, CancellationToken cancellationToken);
+
+    /// <summary>Gets safe profile statistics.</summary>
+    Task<UserStats> GetStatsAsync(Guid userId, CancellationToken cancellationToken);
+
+    /// <summary>Soft-deletes a user and revokes their sessions.</summary>
+    Task<bool> DeleteAsync(Guid userId, CancellationToken cancellationToken);
 }
+
+/// <summary>Safe writing statistics for a profile.</summary>
+public sealed record UserStats(int TotalEntries, int ActiveCircles, int BloomedCircles, int CurrentStreak);

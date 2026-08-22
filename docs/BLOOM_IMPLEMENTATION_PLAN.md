@@ -64,6 +64,18 @@ The bloom read/social slice is now implemented end to end:
 
 The local image upload/protection and release-hardening slices remain for Phase 5. No migration has been generated yet; reaction/comment tables will be included in the final migration.
 
+### Phase 5 checkpoint — privacy and release hardening
+
+The release-hardening slice is now implemented:
+
+- Diary bodies are protected with the local Data Protection key ring before PostgreSQL persistence and decrypted only for authorized bloomed reads.
+- Optional JPEG/PNG/WebP uploads are validated by content signature, size-limited, encrypted, and stored under the ignored project-local `App_Data/uploads` folder. Media streaming reuses the same bloom and membership authorization as entry text.
+- Profile update, safe writing statistics, and soft account deletion/revocation endpoints are available, with matching mobile controls.
+- The API has Problem Details fallback handling, a fixed-window rate limit, database-backed health checking, and the final EF Core PostgreSQL migration.
+- The mobile Write screen can attach one photo, clears the local photo after a successful seal, and the Profile screen supports editing and account deletion.
+
+The current release still intentionally excludes push workers, cloud media, keepsakes/share links, and AI summaries as agreed in the product boundary.
+
 ## 1. Product summary
 
 Bloom is a private, delayed-sharing diary for small groups. A user creates a **circle**, invites friends, chooses an immutable **bloom date**, and writes entries into that circle while it is sealed. When the server reaches the bloom time, eligible members can read the entries together in a shared timeline and add reactions or comments.

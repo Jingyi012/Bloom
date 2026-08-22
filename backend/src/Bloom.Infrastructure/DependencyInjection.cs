@@ -5,6 +5,10 @@ using Bloom.Application.Entries;
 using Bloom.Infrastructure.Circles;
 using Bloom.Infrastructure.Entries;
 using Bloom.Infrastructure.Identity;
+using Bloom.Application.Media;
+using Bloom.Infrastructure.Media;
+using Bloom.Application.Security;
+using Bloom.Infrastructure.Security;
 using Bloom.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -28,6 +32,13 @@ public static class DependencyInjection
         services.AddSingleton<IAuditClock, SystemAuditClock>();
         services.AddSingleton<IAuditStampWriter, AuditStampWriter>();
         services.AddDbContext<BloomDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddOptions<ImageStorageOptions>()
+            .Bind(configuration.GetSection(ImageStorageOptions.SectionName))
+            .Validate(settings => settings.MaxBytes is > 0 and <= 25 * 1024 * 1024, "ImageStorage:MaxBytes must be between 1 byte and 25 MB.")
+            .ValidateOnStart();
+        services.AddSingleton<IImageStorage, LocalImageStorage>();
+        services.AddSingleton<IEntryProtector, DataProtectionEntryProtector>();
+        services.AddScoped<IMediaService, EfMediaService>();
         services.AddScoped<IGoogleUserService, EfGoogleUserService>();
         services.AddScoped<ICircleService, EfCircleService>();
         services.AddScoped<IEntryService, EfEntryService>();

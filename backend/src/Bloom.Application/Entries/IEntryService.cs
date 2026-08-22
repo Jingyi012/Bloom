@@ -1,4 +1,5 @@
 using Bloom.Domain.Entries;
+using Bloom.Application.Media;
 
 namespace Bloom.Application.Entries;
 
@@ -15,6 +16,19 @@ public interface IEntryService
         string? mood,
         string? promptKey,
         IReadOnlyCollection<Guid> circleIds,
+        CancellationToken cancellationToken);
+
+    /// <summary>Submits an entry and stores one encrypted local image for each publication.</summary>
+    Task<EntrySubmissionResult> SubmitWithMediaAsync(
+        Guid authorUserId,
+        string clientEntryId,
+        DateOnly authorLocalDate,
+        string authorTimeZoneId,
+        string text,
+        string? mood,
+        string? promptKey,
+        IReadOnlyCollection<Guid> circleIds,
+        ImageUpload image,
         CancellationToken cancellationToken);
 
     /// <summary>Gets a page of entries visible in a bloomed circle.</summary>
@@ -58,6 +72,7 @@ public sealed record TimelineEntry(
     DateTimeOffset SubmittedAtUtc,
     string Text,
     string? Mood,
+    Guid? MediaId,
     IReadOnlyList<ReactionSummary> Reactions,
     int CommentCount);
 

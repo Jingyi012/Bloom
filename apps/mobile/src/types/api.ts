@@ -26,6 +26,13 @@ export type CurrentUserResponse = {
   timeZoneId: string;
 };
 
+export type UserStatsResponse = {
+  totalEntries: number;
+  activeCircles: number;
+  bloomedCircles: number;
+  currentStreak: number;
+};
+
 export type CircleSummary = {
   id: string;
   name: string;
@@ -110,6 +117,7 @@ export type TimelineEntry = {
   submittedAtUtc: string;
   text: string;
   mood: string | null;
+  mediaId: string | null;
   reactions: Reaction[];
   commentCount: number;
 };

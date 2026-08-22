@@ -14,7 +14,7 @@ public sealed class DiaryEntryConfiguration : IEntityTypeConfiguration<DiaryEntr
         builder.Configure(nameof(DiaryEntry));
         builder.Property(entity => entity.ClientEntryId).HasMaxLength(100).IsRequired();
         builder.Property(entity => entity.AuthorTimeZoneId).HasMaxLength(100).IsRequired();
-        builder.Property(entity => entity.Text).HasMaxLength(5000).IsRequired();
+        builder.Property(entity => entity.Text).HasMaxLength(20000).IsRequired();
         builder.Property(entity => entity.Mood).HasMaxLength(32);
         builder.Property(entity => entity.PromptKey).HasMaxLength(128);
         builder.HasIndex(entity => new { entity.AuthorUserId, entity.ClientEntryId }).IsUnique();

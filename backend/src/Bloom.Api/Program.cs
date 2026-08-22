@@ -1,4 +1,5 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Bloom.Api.Configuration;
 using Bloom.Api.Security;
 using Bloom.Application.Identity;
@@ -7,6 +8,7 @@ using Bloom.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -52,6 +54,14 @@ var bloomSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(bloomOptio
 // Add services to the container.
 
 builder.Services.AddControllers();
+builder.Services.AddProblemDetails();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("api", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+});
 builder.Services
     .AddAuthentication(options =>
     {
@@ -94,6 +104,8 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+app.UseExceptionHandler();
+
 if (builder.Configuration.GetValue<bool>("Bloom:ApplyMigrationsOnStartup"))
 {
     await app.ApplyBloomMigrationsAsync();
@@ -106,8 +118,13 @@ if (!app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
-app.MapControllers();
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapControllers().RequireRateLimiting("api");
+app.MapGet("/health", async (BloomDbContext db, CancellationToken cancellationToken) =>
+{
+    var databaseAvailable = await db.Database.CanConnectAsync(cancellationToken).ConfigureAwait(false);
+    return databaseAvailable ? Results.Ok(new { status = "ok" }) : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+});
 
 app.Run();

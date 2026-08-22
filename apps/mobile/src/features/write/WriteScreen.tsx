@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/auth/AuthProvider';
 import { bloomApi } from '@/api/client';
@@ -30,6 +32,7 @@ export default function WriteScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [imageUri, setImageUri] = useState<string | null>(null);
 
   const loadCircles = useCallback(async () => {
     if (!session?.accessToken) return;
@@ -70,24 +73,37 @@ export default function WriteScreen() {
     setError(null);
     setNotice(null);
     try {
-      await bloomApi.submitEntry(session.accessToken, {
+      const submission = {
         clientEntryId: createClientEntryId(),
         authorLocalDate: getLocalDate(),
         authorTimeZoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
         text: text.trim(),
         mood,
         circleIds: selectedCircleIds,
-      });
+      };
+      if (imageUri) await bloomApi.submitEntryWithMedia(session.accessToken, submission, imageUri);
+      else await bloomApi.submitEntry(session.accessToken, submission);
       setText('');
       setMood(undefined);
       setSelectedCircleIds([]);
+      setImageUri(null);
       setNotice('Sealed. You can read this page again when your circles bloom.');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Could not seal today’s page.');
     } finally {
       setIsSubmitting(false);
     }
-  }, [mood, selectedCircleIds, session?.accessToken, text]);
+  }, [imageUri, mood, selectedCircleIds, session?.accessToken, text]);
+
+  const pickImage = useCallback(async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError('Allow photo access to attach an image.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: true, aspect: [4, 3] });
+    if (!result.canceled) setImageUri(result.assets[0]?.uri ?? null);
+  }, []);
 
   return (
     <Screen>
@@ -110,6 +126,11 @@ export default function WriteScreen() {
         value={text}
       />
       <Text style={styles.counter}>{text.length}/5000</Text>
+
+      <Pressable accessibilityRole="button" accessibilityLabel="Attach one photo" onPress={() => void pickImage()} style={styles.photoButton}>
+        <Text style={styles.photoButtonText}>{imageUri ? 'Replace photo' : 'Attach one photo (optional)'}</Text>
+      </Pressable>
+      {imageUri ? <Image accessibilityLabel="Selected diary photo" contentFit="cover" source={imageUri} style={styles.photoPreview} /> : null}
 
       <Text style={styles.section}>Mood (optional)</Text>
       <View style={styles.chipRow}>

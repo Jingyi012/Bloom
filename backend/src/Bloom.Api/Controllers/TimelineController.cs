@@ -51,6 +51,7 @@ public sealed class TimelineController(IEntryService entryService) : ControllerB
         item.SubmittedAtUtc,
         item.Text,
         item.Mood,
+        item.MediaId,
         item.Reactions.Select(reaction => new ReactionResponse(reaction.EmojiCode, reaction.Count, reaction.ReactedByCurrentUser)).ToArray(),
         item.CommentCount);
 

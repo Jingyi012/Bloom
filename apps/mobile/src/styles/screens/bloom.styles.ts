@@ -18,6 +18,7 @@ export const bloomStyles = StyleSheet.create({
   date: { color: colors.inkSoft, fontSize: 11, marginTop: 2 },
   mood: { backgroundColor: colors.lavenderLight, borderRadius: 12, color: colors.sageDark, fontSize: 10, fontWeight: '700', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   body: { color: colors.ink, fontSize: 15, lineHeight: 23, marginTop: spacing.lg },
+  media: { borderRadius: 16, height: 220, marginTop: spacing.md, width: '100%' },
   actionRow: { alignItems: 'center', borderTopColor: colors.line, borderTopWidth: 1, flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg, paddingTop: spacing.md },
   reaction: { alignItems: 'center', backgroundColor: colors.background, borderRadius: 14, flexDirection: 'row', gap: 4, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   reactionActive: { backgroundColor: colors.cardWarm },

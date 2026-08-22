@@ -15,6 +15,7 @@ import type {
   GoogleSignInResponse,
   InviteCircleMemberResponse,
   RefreshSessionResponse,
+  UserStatsResponse,
 } from '@/types/api';
 
 const apiUrl = (Constants.expoConfig?.extra?.apiUrl as string | undefined)
@@ -38,7 +39,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.status === 204 ? (undefined as T) : (await response.json() as T);
 }
 
+async function requestMultipart<T>(path: string, formData: FormData, accessToken: string): Promise<T> {
+  const response = await fetch(`${apiUrl}${path}`, {
+    method: 'POST',
+    body: formData,
+    headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) throw new Error(`Bloom API request failed (${response.status})`);
+  return response.status === 204 ? (undefined as T) : (await response.json() as T);
+}
+
 export const bloomApi = {
+  mediaUrl: (mediaId: string) => `${apiUrl}/media/${mediaId}/content`,
   signInWithGoogle: (googleIdToken: string, request: GoogleSignInRequest) => requestJson<GoogleSignInResponse>('/auth/google', {
     method: 'POST',
     body: JSON.stringify(request),
@@ -49,6 +61,18 @@ export const bloomApi = {
     body: JSON.stringify({ refreshToken }),
   }),
   me: (accessToken: string) => requestJson<CurrentUserResponse>('/me', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  updateProfile: (accessToken: string, displayName: string, timeZoneId: string) => requestJson<CurrentUserResponse>('/me', {
+    method: 'PATCH',
+    body: JSON.stringify({ displayName, timeZoneId }),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  stats: (accessToken: string) => requestJson<UserStatsResponse>('/me/stats', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  deleteAccount: (accessToken: string) => requestJson<void>('/me', {
+    method: 'DELETE',
     headers: { Authorization: `Bearer ${accessToken}` },
   }),
   listCircles: (accessToken: string) => requestJson<CircleSummary[]>('/circles', {
@@ -84,6 +108,18 @@ export const bloomApi = {
     body: JSON.stringify(request),
     headers: { Authorization: `Bearer ${accessToken}` },
   }),
+  submitEntryWithMedia: (accessToken: string, request: EntrySubmissionRequest, imageUri: string) => {
+    const formData = new FormData();
+    formData.append('clientEntryId', request.clientEntryId);
+    formData.append('authorLocalDate', request.authorLocalDate);
+    formData.append('authorTimeZoneId', request.authorTimeZoneId);
+    formData.append('text', request.text);
+    if (request.mood) formData.append('mood', request.mood);
+    if (request.promptKey) formData.append('promptKey', request.promptKey);
+    formData.append('circleIds', request.circleIds.join(','));
+    formData.append('image', { uri: imageUri, name: 'bloom-entry.jpg', type: 'image/jpeg' } as unknown as Blob);
+    return requestMultipart<EntrySubmissionResponse>('/entries/with-media', formData, accessToken);
+  },
   getTimeline: (accessToken: string, circleId: string, cursor?: string) => requestJson<TimelineResponse>(`/circles/${circleId}/timeline${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   }),

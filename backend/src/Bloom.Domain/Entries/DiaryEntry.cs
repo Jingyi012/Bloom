@@ -44,7 +44,7 @@ public sealed class DiaryEntry : AuditableEntity
         ArgumentException.ThrowIfNullOrWhiteSpace(clientEntryId);
         ArgumentException.ThrowIfNullOrWhiteSpace(authorTimeZoneId);
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
-        if (text.Trim().Length > 5000) throw new ArgumentException("Entry text cannot exceed 5,000 characters.", nameof(text));
+        if (text.Trim().Length > 20000) throw new ArgumentException("Entry payload cannot exceed 20,000 characters.", nameof(text));
 
         return new DiaryEntry
         {

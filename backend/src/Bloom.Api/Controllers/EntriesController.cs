@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Bloom.Application.Entries;
+using Bloom.Application.Media;
 using Bloom.Contracts.Entries;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -62,6 +63,37 @@ public sealed class EntriesController(IEntryService entryService) : ControllerBa
         {
             return Conflict(exception.Message);
         }
+    }
+
+    /// <summary>Submits an entry with one optional local image.</summary>
+    [HttpPost("with-media")]
+    [RequestSizeLimit(11 * 1024 * 1024)]
+    public async Task<ActionResult<EntrySubmissionResponse>> SubmitWithMediaAsync(
+        [FromForm] string clientEntryId,
+        [FromForm] DateOnly authorLocalDate,
+        [FromForm] string authorTimeZoneId,
+        [FromForm] string text,
+        [FromForm] string? mood,
+        [FromForm] string? promptKey,
+        [FromForm] string circleIds,
+        IFormFile image,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        if (image is null) return BadRequest("An image is required.");
+        Guid[] parsedCircleIds;
+        try { parsedCircleIds = circleIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Guid.Parse).ToArray(); }
+        catch (FormatException) { return BadRequest("Circle ids are invalid."); }
+        try
+        {
+            await using var stream = image.OpenReadStream();
+            var result = await _entryService.SubmitWithMediaAsync(userId, clientEntryId, authorLocalDate, authorTimeZoneId, text, mood, promptKey, parsedCircleIds, new ImageUpload(stream, image.ContentType), cancellationToken).ConfigureAwait(false);
+            return StatusCode(StatusCodes.Status201Created, new EntrySubmissionResponse(result.DiaryEntryId, result.PublicationIds, result.CircleIds, result.AuthorLocalDate, result.SubmittedAtUtc));
+        }
+        catch (ArgumentException exception) { return BadRequest(exception.Message); }
+        catch (KeyNotFoundException exception) { return NotFound(exception.Message); }
+        catch (UnauthorizedAccessException exception) { return StatusCode(StatusCodes.Status403Forbidden, exception.Message); }
+        catch (InvalidOperationException exception) { return Conflict(exception.Message); }
     }
 
     /// <summary>Gets one entry after its circle has bloomed.</summary>
@@ -176,6 +208,7 @@ public sealed class EntriesController(IEntryService entryService) : ControllerBa
         item.SubmittedAtUtc,
         item.Text,
         item.Mood,
+        item.MediaId,
         item.Reactions.Select(reaction => new ReactionResponse(reaction.EmojiCode, reaction.Count, reaction.ReactedByCurrentUser)).ToArray(),
         item.CommentCount);
 }

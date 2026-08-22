@@ -1,6 +1,8 @@
 using Bloom.Application.Auditing;
 using Bloom.Application.Circles;
 using Bloom.Application.Entries;
+using Bloom.Application.Media;
+using Bloom.Application.Security;
 using Bloom.Domain.Circles;
 using Bloom.Domain.Entries;
 using Bloom.Infrastructure.Persistence;
@@ -14,7 +16,9 @@ namespace Bloom.Infrastructure.Entries;
 public sealed class EfEntryService(
     BloomDbContext db,
     IAuditStampWriter auditStampWriter,
-    TimeProvider timeProvider) : IEntryService
+    TimeProvider timeProvider,
+    IImageStorage imageStorage,
+    IEntryProtector entryProtector) : IEntryService
 {
     private static readonly HashSet<string> AllowedReactionCodes = ["❤️", "😊", "😂", "😢", "🔥", "👏"];
     private const int TimelinePageSize = 30;
@@ -22,6 +26,8 @@ public sealed class EfEntryService(
     private readonly BloomDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
     private readonly IAuditStampWriter _auditStampWriter = auditStampWriter ?? throw new ArgumentNullException(nameof(auditStampWriter));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IImageStorage _imageStorage = imageStorage ?? throw new ArgumentNullException(nameof(imageStorage));
+    private readonly IEntryProtector _entryProtector = entryProtector ?? throw new ArgumentNullException(nameof(entryProtector));
 
     /// <inheritdoc />
     public async Task<EntrySubmissionResult> SubmitAsync(
@@ -37,6 +43,7 @@ public sealed class EfEntryService(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(authorTimeZoneId);
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        if (text.Trim().Length > 5000) throw new ArgumentException("Entry text cannot exceed 5,000 characters.", nameof(text));
         if (circleIds is null || circleIds.Count is < 1 or > 12)
             throw new ArgumentException("Select between one and twelve circles.", nameof(circleIds));
 
@@ -88,7 +95,7 @@ public sealed class EfEntryService(
             throw new InvalidOperationException("You already wrote today's entry to one of the selected circles.");
 
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        var diaryEntry = DiaryEntry.Create(authorUserId, clientEntryId, authorLocalDate, authorTimeZoneId, text, mood, promptKey);
+        var diaryEntry = DiaryEntry.Create(authorUserId, clientEntryId, authorLocalDate, authorTimeZoneId, _entryProtector.Protect(text), mood, promptKey);
         _auditStampWriter.StampCreated(diaryEntry, authorUserId);
         _db.DiaryEntries.Add(diaryEntry);
 
@@ -113,6 +120,50 @@ public sealed class EfEntryService(
         }
 
         return new EntrySubmissionResult(diaryEntry.Id, publications.Select(publication => publication.Id).ToArray(), circles.Select(circle => circle.Id).ToArray(), authorLocalDate, now);
+    }
+
+    /// <inheritdoc />
+    public async Task<EntrySubmissionResult> SubmitWithMediaAsync(
+        Guid authorUserId,
+        string clientEntryId,
+        DateOnly authorLocalDate,
+        string authorTimeZoneId,
+        string text,
+        string? mood,
+        string? promptKey,
+        IReadOnlyCollection<Guid> circleIds,
+        ImageUpload image,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        var result = await SubmitAsync(authorUserId, clientEntryId, authorLocalDate, authorTimeZoneId, text, mood, promptKey, circleIds, cancellationToken).ConfigureAwait(false);
+        if (await _db.EntryMedia.AnyAsync(media => result.PublicationIds.Contains(media.EntryPublicationId) && media.DeletedAtUtc == null, cancellationToken).ConfigureAwait(false))
+            return result;
+
+        StoredImage? stored = null;
+        try
+        {
+            await using (image.Content.ConfigureAwait(false))
+            {
+                stored = await _imageStorage.SaveAsync(authorUserId, image.Content, image.ContentType, cancellationToken).ConfigureAwait(false);
+            }
+            var asset = MediaAsset.Create(authorUserId, stored.RelativePath, stored.ContentType, stored.SizeBytes, stored.Sha256);
+            _auditStampWriter.StampCreated(asset, authorUserId);
+            _db.MediaAssets.Add(asset);
+            foreach (var publicationId in result.PublicationIds)
+            {
+                var link = EntryMedia.Create(publicationId, asset.Id);
+                _auditStampWriter.StampCreated(link, authorUserId);
+                _db.EntryMedia.Add(link);
+            }
+            await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return result;
+        }
+        catch
+        {
+            if (stored is not null) await _imageStorage.DeleteAsync(stored.RelativePath, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
     }
 
     /// <inheritdoc />
@@ -247,6 +298,8 @@ public sealed class EfEntryService(
             .ToArrayAsync(cancellationToken).ConfigureAwait(false);
         var commentCounts = await _db.Comments.AsNoTracking().Where(comment => publicationIds.Contains(comment.EntryPublicationId) && comment.DeletedAtUtc == null && !comment.IsHidden)
             .GroupBy(comment => comment.EntryPublicationId).Select(group => new { PublicationId = group.Key, Count = group.Count() }).ToDictionaryAsync(item => item.PublicationId, item => item.Count, cancellationToken).ConfigureAwait(false);
+        var mediaIds = await _db.EntryMedia.AsNoTracking().Where(media => publicationIds.Contains(media.EntryPublicationId) && media.DeletedAtUtc == null)
+            .OrderBy(media => media.SortOrder).GroupBy(media => media.EntryPublicationId).Select(group => new { PublicationId = group.Key, MediaId = group.First().MediaAssetId }).ToDictionaryAsync(item => item.PublicationId, item => item.MediaId, cancellationToken).ConfigureAwait(false);
         return rows.Select(row => new TimelineEntry(
             row.publication.Id,
             row.diaryEntry.Id,
@@ -255,8 +308,9 @@ public sealed class EfEntryService(
             row.author.GoogleAvatarUrl,
             row.publication.AuthorLocalDate,
             row.publication.SubmittedAtUtc,
-            row.diaryEntry.Text,
+            _entryProtector.Unprotect(row.diaryEntry.Text),
             row.diaryEntry.Mood,
+            mediaIds.ContainsKey((Guid)row.publication.Id) ? (Guid?)mediaIds[(Guid)row.publication.Id] : null,
             reactions.Where(reaction => reaction.EntryPublicationId == row.publication.Id).Select(reaction => new ReactionSummary(reaction.EmojiCode, reaction.Count, reaction.Reacted)).ToArray(),
             (commentCounts.ContainsKey((Guid)row.publication.Id) ? commentCounts[(Guid)row.publication.Id] : 0))).ToArray();
     }
