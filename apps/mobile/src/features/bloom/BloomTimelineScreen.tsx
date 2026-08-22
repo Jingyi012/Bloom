@@ -1,109 +1,169 @@
-import { FlashList } from '@shopify/flash-list';
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { Image } from 'expo-image';
-import { useLocalSearchParams } from 'expo-router';
-import { Screen } from '@/components/Screen';
-import { useAuth } from '@/auth/AuthProvider';
-import { bloomApi } from '@/api/client';
-import type { Comment as ApiComment, TimelineEntry } from '@/types/api';
-import { colors } from '@/styles/tokens';
-import { bloomStyles as styles } from '@/styles/screens/bloom.styles';
-import { InlineAlert } from '@/components/InlineAlert';
-import { useSettings } from '@/settings/SettingsProvider';
-
-const PRIMARY_REACTION = '❤️';
+import { FlashList } from "@shopify/flash-list";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  AppState,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { Image } from "expo-image";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Screen } from "@/components/Screen";
+import { useAuth } from "@/auth/AuthProvider";
+import { bloomApi } from "@/api/client";
+import type { TimelineEntry } from "@/types/api";
+import { colors } from "@/styles/tokens";
+import { bloomStyles as styles } from "@/styles/screens/bloom.styles";
+import { InlineAlert } from "@/components/InlineAlert";
+import { useSettings } from "@/settings/SettingsProvider";
+import { REACTION_OPTIONS, type ReactionCode } from "@/features/bloom/reactions";
 
 export default function BloomTimelineScreen() {
-  const { circleId } = useLocalSearchParams<{ circleId: string }>();
+  const { circleId, circleName, circleEmoji } = useLocalSearchParams<{
+    circleId: string;
+    circleName?: string;
+    circleEmoji?: string;
+  }>();
+  const router = useRouter();
   const { session } = useAuth();
   const { t } = useSettings();
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
-  const [comments, setComments] = useState<Record<string, ApiComment[]>>({});
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [openComments, setOpenComments] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (refresh = false) => {
-    if (!session?.accessToken || !circleId) return;
-    refresh ? setIsRefreshing(true) : setIsLoading(true);
-    setError(null);
-    try {
-      const page = await bloomApi.getTimeline(session.accessToken, circleId);
-      setEntries(page.items);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : t('timelineLoadFailed'));
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [circleId, session?.accessToken, t]);
+  const load = useCallback(
+    async (refresh = false) => {
+      if (!session?.accessToken || !circleId) return;
+      refresh ? setIsRefreshing(true) : setIsLoading(true);
+      setError(null);
+      try {
+        const page = await bloomApi.getTimeline(session.accessToken, circleId);
+        setEntries(page.items);
+      } catch (loadError) {
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : t("timelineLoadFailed"),
+        );
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [circleId, session?.accessToken, t],
+  );
 
-  useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', state => { if (state === 'active') void load(true); });
+    void load();
+  }, [load]);
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void load(true);
+    });
     return () => subscription.remove();
   }, [load]);
 
-  const toggleReaction = useCallback(async (entry: TimelineEntry) => {
-    if (!session?.accessToken) return;
-    const current = entry.reactions.find(reaction => reaction.emojiCode === PRIMARY_REACTION);
-    try {
-      const result = current?.reactedByCurrentUser
-        ? await bloomApi.removeReaction(session.accessToken, entry.publicationId, PRIMARY_REACTION)
-        : await bloomApi.addReaction(session.accessToken, entry.publicationId, PRIMARY_REACTION);
-      setEntries(items => items.map(item => item.publicationId === entry.publicationId
-        ? { ...item, reactions: [...item.reactions.filter(reaction => reaction.emojiCode !== PRIMARY_REACTION), result] }
-        : item));
-    } catch (reactionError) {
-      setError(reactionError instanceof Error ? reactionError.message : t('reactionUpdateFailed'));
-    }
-  }, [session?.accessToken, t]);
-
-  const toggleComments = useCallback(async (entry: TimelineEntry) => {
-    const nextOpen = !openComments[entry.publicationId];
-    setOpenComments(current => ({ ...current, [entry.publicationId]: nextOpen }));
-    if (!nextOpen || comments[entry.publicationId]) return;
-    if (!session?.accessToken) return;
-    try {
-      const page = await bloomApi.getComments(session.accessToken, entry.publicationId);
-      setComments(current => ({ ...current, [entry.publicationId]: page.items }));
-    } catch (commentError) {
-      setError(commentError instanceof Error ? commentError.message : t('commentsLoadFailed'));
-    }
-  }, [comments, openComments, session?.accessToken, t]);
-
-  const addComment = useCallback(async (entry: TimelineEntry) => {
-    const body = drafts[entry.publicationId]?.trim();
-    if (!body || !session?.accessToken) return;
-    try {
-      const comment = await bloomApi.addComment(session.accessToken, entry.publicationId, body);
-      setComments(current => ({ ...current, [entry.publicationId]: [...(current[entry.publicationId] ?? []), comment] }));
-      setDrafts(current => ({ ...current, [entry.publicationId]: '' }));
-      setEntries(items => items.map(item => item.publicationId === entry.publicationId ? { ...item, commentCount: item.commentCount + 1 } : item));
-    } catch (commentError) {
-      setError(commentError instanceof Error ? commentError.message : t('commentAddFailed'));
-    }
-  }, [drafts, session?.accessToken, t]);
+  const updateReaction = useCallback(
+    async (entry: TimelineEntry, code: ReactionCode) => {
+      if (!session?.accessToken) return;
+      const current = entry.reactions.find((reaction) => reaction.emojiCode === code);
+      try {
+        const result = current?.reactedByCurrentUser
+          ? await bloomApi.removeReaction(
+              session.accessToken,
+              entry.publicationId,
+              code,
+            )
+          : await bloomApi.addReaction(
+              session.accessToken,
+              entry.publicationId,
+              code,
+            );
+        setEntries((items) =>
+          items.map((item) =>
+            item.publicationId === entry.publicationId
+              ? {
+                  ...item,
+                  reactions: [
+                    ...item.reactions.filter(
+                      (reaction) => reaction.emojiCode !== code,
+                    ),
+                    result,
+                  ],
+                }
+              : item,
+          ),
+        );
+      } catch (reactionError) {
+        setError(
+          reactionError instanceof Error
+            ? reactionError.message
+            : t("reactionUpdateFailed"),
+        );
+      }
+    },
+    [session?.accessToken, t],
+  );
 
   return (
     <Screen scroll={false}>
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>{t('timelineEyebrow')}</Text>
-        <Text style={styles.title}>{t('timelineTitle')}</Text>
-        <Text style={styles.subtitle}>{t('timelineSubtitle')}</Text>
+      <View style={styles.topBar}>
+        <Pressable
+          accessibilityLabel={t("backToCircles")}
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
+          <Text style={styles.backIcon}>‹</Text>
+        </Pressable>
+        <Text numberOfLines={1} style={styles.topBarTitle}>
+          {circleName || t("timelineTitle")} {circleEmoji || "🌸"}
+        </Text>
+        <Text style={styles.bloomBadge}>{t("bloomedStatus")}</Text>
       </View>
-      {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
-      {isLoading ? <View style={styles.loading}><ActivityIndicator color={colors.coralDark} /></View> : (
+      <View style={styles.header}>
+        <Text style={styles.subtitle}>{t("timelineSubtitle")}</Text>
+      </View>
+      {error ? (
+        <InlineAlert message={error} onDismiss={() => setError(null)} />
+      ) : null}
+      {isLoading ? (
+        <View style={styles.loading}>
+          <ActivityIndicator color={colors.coralDark} />
+        </View>
+      ) : (
         <FlashList
           data={entries}
-          keyExtractor={item => item.publicationId}
-          ListEmptyComponent={<Text style={styles.empty}>{t('noSharedEntries')}</Text>}
+          contentContainerStyle={styles.listContent}
+          keyExtractor={(item) => item.publicationId}
+          ListEmptyComponent={
+            <Text style={styles.empty}>{t("noSharedEntries")}</Text>
+          }
           onRefresh={() => void load(true)}
           refreshing={isRefreshing}
-          renderItem={({ item }) => <TimelineCard accessToken={session?.accessToken} entry={item} comments={comments[item.publicationId] ?? []} draft={drafts[item.publicationId] ?? ''} isCommentsOpen={openComments[item.publicationId] === true} onChangeDraft={value => setDrafts(current => ({ ...current, [item.publicationId]: value }))} onAddComment={() => void addComment(item)} onToggleComments={() => void toggleComments(item)} onToggleReaction={() => void toggleReaction(item)} />}
+          renderItem={({ item, index }) => (
+            <View>
+              {index === 0 ||
+              entries[index - 1]?.authorLocalDate !== item.authorLocalDate ? (
+                <DateDivider date={item.authorLocalDate} />
+              ) : null}
+              <TimelineCard
+                accessToken={session?.accessToken}
+                entry={item}
+                onOpen={() =>
+                  router.push({
+                    pathname: "/entry/[publicationId]",
+                    params: { publicationId: item.publicationId },
+                  })
+                }
+                onSelectReaction={(code) => void updateReaction(item, code)}
+              />
+            </View>
+          )}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -111,38 +171,163 @@ export default function BloomTimelineScreen() {
   );
 }
 
-function TimelineCard({ accessToken, entry, comments, draft, isCommentsOpen, onChangeDraft, onAddComment, onToggleComments, onToggleReaction }: { accessToken?: string; entry: TimelineEntry; comments: ApiComment[]; draft: string; isCommentsOpen: boolean; onChangeDraft: (value: string) => void; onAddComment: () => void; onToggleComments: () => void; onToggleReaction: () => void }) {
+const TimelineCard = memo(function TimelineCard({
+  accessToken,
+  entry,
+  onOpen,
+  onSelectReaction,
+}: {
+  accessToken?: string;
+  entry: TimelineEntry;
+  onOpen: () => void;
+  onSelectReaction: (code: ReactionCode) => void;
+}) {
   const { t } = useSettings();
-  const reaction = entry.reactions.find(item => item.emojiCode === PRIMARY_REACTION);
-  const initial = entry.authorDisplayName.trim().charAt(0).toUpperCase() || '?';
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const suppressNextReactionPress = useRef(false);
+  const reaction = entry.reactions.find(
+    (item) => item.emojiCode === REACTION_OPTIONS[0].code,
+  );
+  const currentUserReaction = entry.reactions.find((item) => item.reactedByCurrentUser);
+  const selectedReaction = REACTION_OPTIONS.find((option) => option.code === currentUserReaction?.emojiCode) ?? REACTION_OPTIONS[0];
+  const initial = entry.authorDisplayName.trim().charAt(0).toUpperCase() || "?";
   return (
     <View style={styles.card}>
-      <View style={styles.authorRow}>
-        <View style={styles.avatar}><Text style={styles.avatarText}>{initial}</Text></View>
-        <View style={styles.authorCopy}><Text style={styles.author}>{entry.authorDisplayName}</Text><Text style={styles.date}>{formatDate(entry.authorLocalDate)}</Text></View>
-        {entry.mood ? <Text style={styles.mood}>{translateMood(entry.mood, t)}</Text> : null}
-      </View>
-      <Text style={styles.body}>{entry.text}</Text>
-      {entry.mediaIds.length > 0 && accessToken ? <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.mediaGallery}>
-        {entry.mediaIds.map((mediaId, index) => <Image key={mediaId} accessibilityLabel={`${t('diaryPhoto')} ${index + 1} ${t('of')} ${entry.mediaIds.length}`} contentFit="cover" source={{ uri: bloomApi.mediaUrl(mediaId), headers: { Authorization: `Bearer ${accessToken}` } }} style={styles.media} />)}
-      </ScrollView> : null}
+      <Pressable
+        accessibilityHint={t("openDiaryEntry")}
+        accessibilityRole="button"
+        onPress={onOpen}
+        style={({ pressed }) => [pressed ? styles.cardPressed : null]}
+      >
+        <View style={styles.authorRow}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initial}</Text>
+          </View>
+          <View style={styles.authorCopy}>
+            <Text style={styles.author}>{entry.authorDisplayName}</Text>
+            <Text style={styles.date}>
+              {formatTime(entry.submittedAtUtc)}
+              {entry.mood ? ` · ${t("felt")} ${moodEmoji(entry.mood)}` : ""}
+            </Text>
+          </View>
+          {entry.mood ? (
+            <Text style={styles.mood}>{moodEmoji(entry.mood)}</Text>
+          ) : null}
+        </View>
+        <Text style={styles.body}>{entry.text}</Text>
+      </Pressable>
+      {entry.mediaIds.length > 0 && accessToken ? (
+        <ScrollView
+          directionalLockEnabled
+          horizontal
+          nestedScrollEnabled
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          style={styles.mediaGallery}
+        >
+          {entry.mediaIds.map((mediaId, index) => (
+            <Image
+              key={mediaId}
+              accessibilityLabel={`${t("diaryPhoto")} ${index + 1} ${t("of")} ${entry.mediaIds.length}`}
+              contentFit="cover"
+              source={{
+                uri: bloomApi.mediaUrl(mediaId),
+                headers: { Authorization: `Bearer ${accessToken}` },
+              }}
+              style={styles.media}
+            />
+          ))}
+        </ScrollView>
+      ) : null}
+      {showReactionPicker ? (
+        <View style={styles.reactionPicker}>
+          {REACTION_OPTIONS.map((option) => (
+            <Pressable
+              key={option.code}
+              accessibilityRole="button"
+              onPress={() => {
+                onSelectReaction(option.code);
+                setShowReactionPicker(false);
+              }}
+              style={styles.reactionOption}
+            >
+              <Text style={styles.reactionOptionText}>{option.icon}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       <View style={styles.actionRow}>
-        <Pressable accessibilityLabel={t('reactWithHeart')} accessibilityRole="button" accessibilityState={{ selected: reaction?.reactedByCurrentUser === true }} onPress={onToggleReaction} style={[styles.reaction, reaction?.reactedByCurrentUser ? styles.reactionActive : null]}><Text style={styles.reactionText}>❤️</Text><Text style={styles.reactionCount}>{reaction?.count ?? 0}</Text></Pressable>
-        <Pressable accessibilityRole="button" onPress={onToggleComments}><Text style={styles.commentAction}>{entry.commentCount} {entry.commentCount === 1 ? t('comment') : t('comments')}</Text></Pressable>
+        <Pressable
+          accessibilityLabel={t("reactWithHeart")}
+          accessibilityRole="button"
+          accessibilityState={{
+            selected: currentUserReaction !== undefined,
+          }}
+          delayLongPress={250}
+          onLongPress={() => {
+            suppressNextReactionPress.current = true;
+            setShowReactionPicker(true);
+          }}
+          onPress={() => {
+            if (suppressNextReactionPress.current) {
+              suppressNextReactionPress.current = false;
+              return;
+            }
+            onSelectReaction(selectedReaction.code);
+          }}
+          style={[
+            styles.reaction,
+            currentUserReaction ? styles.reactionActive : null,
+          ]}
+        >
+          <Text style={styles.reactionText}>{selectedReaction.icon}</Text>
+          <Text style={styles.reactionCount}>{currentUserReaction?.count ?? reaction?.count ?? 0}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel={`${entry.commentCount} ${entry.commentCount === 1 ? t("comment") : t("comments")}`}
+          accessibilityRole="button"
+          onPress={onOpen}
+        >
+          <Text style={styles.commentAction}>
+            {entry.commentCount}{" "}
+            {entry.commentCount === 1 ? t("comment") : t("comments")}
+          </Text>
+        </Pressable>
       </View>
-      {isCommentsOpen ? <View style={styles.comments}>
-        {comments.map(comment => <View key={comment.id} style={styles.comment}><Text style={styles.commentAuthor}>{comment.authorDisplayName}</Text><Text style={styles.commentBody}>{comment.body}</Text></View>)}
-        <View style={styles.commentInputRow}><TextInput accessibilityLabel={t('comment')} maxLength={1000} onChangeText={onChangeDraft} placeholder={t('commentPlaceholder')} placeholderTextColor={colors.inkSoft} style={styles.commentInput} value={draft} /><Pressable accessibilityLabel={t('post')} accessibilityRole="button" disabled={!draft.trim()} onPress={onAddComment}><Text style={styles.commentSend}>{t('post')}</Text></Pressable></View>
-      </View> : null}
     </View>
+  );
+});
+
+const DateDivider = memo(function DateDivider({ date }: { date: string }) {
+  return (
+    <View style={styles.dayDivider}>
+      <View style={styles.dayDividerLine} />
+      <Text style={styles.dayDividerText}>{formatDate(date)}</Text>
+      <View style={styles.dayDividerLine} />
+    </View>
+  );
+});
+
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
+    new Date(`${value}T12:00:00`),
   );
 }
 
-function translateMood(mood: string, t: ReturnType<typeof useSettings>['t']): string {
-  if (mood === 'heavy' || mood === 'restless' || mood === 'calm' || mood === 'joyful' || mood === 'radiant') return t(mood);
-  return mood;
+function formatTime(value: string): string {
+  return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(
+    new Date(value),
+  );
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(`${value}T12:00:00`));
+function moodEmoji(mood: string): string {
+  return (
+    {
+      heavy: "😢",
+      restless: "😐",
+      calm: "🙂",
+      joyful: "😄",
+      radiant: "🤩",
+    }[mood] ?? mood
+  );
 }

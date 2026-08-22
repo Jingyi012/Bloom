@@ -2,6 +2,11 @@ import { StyleSheet } from 'react-native';
 import { colors, shadows, spacing, typography } from '@/styles/tokens';
 
 export const bloomStyles = StyleSheet.create({
+  topBar: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xs },
+  backButton: { alignItems: 'center', backgroundColor: colors.card, borderColor: colors.line, borderRadius: 18, borderWidth: 1, height: 36, justifyContent: 'center', width: 36 },
+  backIcon: { color: colors.ink, fontSize: 18, fontWeight: '700' },
+  topBarTitle: { color: colors.ink, flex: 1, fontFamily: typography.display, fontSize: 21 },
+  bloomBadge: { backgroundColor: colors.sageLight, borderRadius: 999, color: colors.sageDark, fontFamily: typography.uiBold, fontSize: 10, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   header: { paddingBottom: spacing.lg },
   eyebrow: { color: colors.sageDark, fontSize: 11, fontWeight: '800', letterSpacing: 2 },
   title: { color: colors.ink, fontFamily: typography.display, fontSize: 29, marginTop: spacing.sm },
@@ -9,7 +14,9 @@ export const bloomStyles = StyleSheet.create({
   loading: { alignItems: 'center', flex: 1, justifyContent: 'center' },
   error: { color: colors.coralDark, fontSize: 13, lineHeight: 19, paddingVertical: spacing.lg },
   empty: { color: colors.inkSoft, fontSize: 14, lineHeight: 21, paddingVertical: spacing.xl },
+  listContent: { paddingBottom: spacing.xl },
   card: { ...shadows.card, backgroundColor: colors.card, borderColor: colors.line, borderRadius: 20, borderWidth: 1, marginBottom: spacing.md, padding: spacing.lg },
+  cardPressed: { opacity: 0.86 },
   authorRow: { alignItems: 'center', flexDirection: 'row' },
   avatar: { alignItems: 'center', backgroundColor: colors.sageLight, borderRadius: 20, height: 40, justifyContent: 'center', marginRight: spacing.sm, width: 40 },
   avatarText: { color: colors.sageDark, fontSize: 16, fontWeight: '800' },
@@ -25,6 +32,9 @@ export const bloomStyles = StyleSheet.create({
   reactionActive: { backgroundColor: colors.cardWarm },
   reactionText: { fontSize: 16 },
   reactionCount: { color: colors.inkSoft, fontSize: 12, fontWeight: '700' },
+  reactionPicker: { alignItems: 'center', backgroundColor: colors.card, borderColor: colors.line, borderRadius: 18, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, ...shadows.card },
+  reactionOption: { alignItems: 'center', borderRadius: 16, height: 32, justifyContent: 'center', width: 32 },
+  reactionOptionText: { fontSize: 21 },
   commentAction: { color: colors.inkSoft, fontSize: 12, fontWeight: '700' },
   comments: { borderTopColor: colors.line, borderTopWidth: 1, marginTop: spacing.md, paddingTop: spacing.md },
   comment: { marginBottom: spacing.sm },
@@ -33,4 +43,7 @@ export const bloomStyles = StyleSheet.create({
   commentInputRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   commentInput: { borderColor: colors.line, borderRadius: 14, borderWidth: 1, color: colors.ink, flex: 1, fontSize: 13, minHeight: 38, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   commentSend: { color: colors.coralDark, fontSize: 12, fontWeight: '800' },
+  dayDivider: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm, marginTop: spacing.sm },
+  dayDividerLine: { backgroundColor: colors.line, flex: 1, height: 1 },
+  dayDividerText: { color: colors.inkSoft, fontFamily: typography.uiBold, fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase' },
 });

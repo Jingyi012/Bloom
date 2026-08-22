@@ -9,11 +9,12 @@ export function Screen({
   scroll = true,
   refreshing = false,
   onRefresh,
-}: PropsWithChildren<{ scroll?: boolean; refreshing?: boolean; onRefresh?: () => void }>) {
+  bottomPadding = 126,
+}: PropsWithChildren<{ scroll?: boolean; refreshing?: boolean; onRefresh?: () => void; bottomPadding?: number }>) {
   const insets = useSafeAreaInsets();
   const content = (
     <View
-      style={[screenStyles.content, { paddingBottom: 126 + insets.bottom }]}
+      style={[screenStyles.content, { paddingBottom: bottomPadding + insets.bottom }]}
     >
       {children}
     </View>

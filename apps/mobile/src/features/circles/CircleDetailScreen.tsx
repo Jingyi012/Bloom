@@ -30,23 +30,26 @@ export default function CircleDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const load = useCallback(async (refresh = false) => {
-    if (!session?.accessToken || !circleId) return;
-    refresh ? setIsRefreshing(true) : setIsLoading(true);
-    setError(null);
-    try {
-      setDetail(await bloomApi.getCircle(session.accessToken, circleId));
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : t("circleLoadDetailFailed"),
-      );
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [circleId, session?.accessToken, t]);
+  const load = useCallback(
+    async (refresh = false) => {
+      if (!session?.accessToken || !circleId) return;
+      refresh ? setIsRefreshing(true) : setIsLoading(true);
+      setError(null);
+      try {
+        setDetail(await bloomApi.getCircle(session.accessToken, circleId));
+      } catch (loadError) {
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : t("circleLoadDetailFailed"),
+        );
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [circleId, session?.accessToken, t],
+  );
 
   useEffect(() => {
     void load();
@@ -80,9 +83,7 @@ export default function CircleDetailScreen() {
       await load();
     } catch (inviteError) {
       setError(
-        inviteError instanceof Error
-          ? inviteError.message
-          : t("inviteFailed"),
+        inviteError instanceof Error ? inviteError.message : t("inviteFailed"),
       );
     } finally {
       setIsBusy(false);
@@ -91,33 +92,29 @@ export default function CircleDetailScreen() {
 
   const leave = useCallback(() => {
     if (!session?.accessToken || !circleId) return;
-    Alert.alert(
-      t("leaveCircleTitle"),
-      t("leaveCircleBody"),
-      [
-        { text: t("keepCircle"), style: "cancel" },
-        {
-          text: t("leaveCircle"),
-          style: "destructive",
-          onPress: () =>
-            void (async () => {
-              setIsBusy(true);
-              try {
-                await bloomApi.leaveCircle(session.accessToken, circleId);
-                router.back();
-              } catch (leaveError) {
-                setError(
-                  leaveError instanceof Error
-                    ? leaveError.message
-                    : t("leaveFailed"),
-                );
-              } finally {
-                setIsBusy(false);
-              }
-            })(),
-        },
-      ],
-    );
+    Alert.alert(t("leaveCircleTitle"), t("leaveCircleBody"), [
+      { text: t("keepCircle"), style: "cancel" },
+      {
+        text: t("leaveCircle"),
+        style: "destructive",
+        onPress: () =>
+          void (async () => {
+            setIsBusy(true);
+            try {
+              await bloomApi.leaveCircle(session.accessToken, circleId);
+              router.back();
+            } catch (leaveError) {
+              setError(
+                leaveError instanceof Error
+                  ? leaveError.message
+                  : t("leaveFailed"),
+              );
+            } finally {
+              setIsBusy(false);
+            }
+          })(),
+      },
+    ]);
   }, [circleId, router, session?.accessToken, t]);
 
   if (isLoading)
@@ -154,7 +151,9 @@ export default function CircleDetailScreen() {
       <View style={styles.hero}>
         <Text style={styles.emoji}>{circle.emoji}</Text>
         <Text style={styles.title}>{circle.name}</Text>
-        <Text style={styles.status}>{circle.status === "Bloomed" ? t("bloomedStatus") : t("sealedStatus")}</Text>
+        <Text style={styles.status}>
+          {circle.status === "Bloomed" ? t("bloomedStatus") : t("sealedStatus")}
+        </Text>
         <Text style={styles.bloomDate}>
           {circle.status === "Bloomed"
             ? t("sharedTimelineReady")
@@ -177,8 +176,16 @@ export default function CircleDetailScreen() {
       {error ? (
         <InlineAlert message={error} onDismiss={() => setError(null)} />
       ) : null}
-      {notice ? <InlineAlert message={notice} onDismiss={() => setNotice(null)} variant="success" /> : null}
-      <Text style={styles.section}>{t("members")} · {members.length}</Text>
+      {notice ? (
+        <InlineAlert
+          message={notice}
+          onDismiss={() => setNotice(null)}
+          variant="success"
+        />
+      ) : null}
+      <Text style={styles.section}>
+        {t("members")} · {members.length}
+      </Text>
       {members.map((member) => (
         <View key={member.userId} style={styles.member}>
           <View style={styles.avatar}>
@@ -189,7 +196,8 @@ export default function CircleDetailScreen() {
           <View style={styles.memberCopy}>
             <Text style={styles.memberName}>{member.displayName}</Text>
             <Text style={styles.memberMeta}>
-              {(member.role === "Creator" ? t("creatorRole") : t("memberRole"))} · {t("joined")} {formatDate(member.joinedAtUtc)}
+              {member.role === "Creator" ? t("creatorRole") : t("memberRole")} ·{" "}
+              {t("joined")} {formatDate(member.joinedAtUtc)}
             </Text>
           </View>
         </View>
@@ -225,7 +233,11 @@ export default function CircleDetailScreen() {
           onPress={() =>
             router.push({
               pathname: "/circle/[circleId]",
-              params: { circleId: circle.id },
+              params: {
+                circleId: circle.id,
+                circleName: circle.name,
+                circleEmoji: circle.emoji,
+              },
             })
           }
           style={styles.action}
