@@ -12,7 +12,7 @@ public interface IEntryService
     /// <summary>Updates the current user's diary while today's edit window is open.</summary>
     Task<TodayEntryStatus> UpdateTodayAsync(Guid userId, string text, string? mood, string? promptKey, CancellationToken cancellationToken);
 
-    /// <summary>Soft-deletes the current user's diary while today's edit window is open.</summary>
+    /// <summary>Permanently deletes the current user's diary while today's edit window is open.</summary>
     Task<bool> DeleteTodayAsync(Guid userId, CancellationToken cancellationToken);
 
     /// <summary>Submits one text entry to one or more eligible sealed circles.</summary>

@@ -82,16 +82,16 @@ public sealed class EfEntryService(
         EnsureCanModify(context);
 
         var media = await _db.MediaAssets
-            .Where(asset => asset.DiaryEntryId == context.Entry.Id && asset.DeletedAtUtc == null)
+            .Where(asset => asset.DiaryEntryId == context.Entry.Id)
             .ToArrayAsync(cancellationToken)
             .ConfigureAwait(false);
-        foreach (var publication in context.Publications)
-        {
-            publication.Publication.Withdraw();
-            _auditStampWriter.StampDeleted(publication.Publication, userId);
-        }
-        foreach (var asset in media) _auditStampWriter.StampDeleted(asset, userId);
-        _auditStampWriter.StampDeleted(context.Entry, userId);
+        var publications = await _db.EntryPublications
+            .Where(publication => publication.DiaryEntryId == context.Entry.Id)
+            .ToArrayAsync(cancellationToken)
+            .ConfigureAwait(false);
+        _db.MediaAssets.RemoveRange(media);
+        _db.EntryPublications.RemoveRange(publications);
+        _db.DiaryEntries.Remove(context.Entry);
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         foreach (var asset in media)
         {
@@ -124,7 +124,7 @@ public sealed class EfEntryService(
             throw new ArgumentException("Each circle may only be selected once.", nameof(circleIds));
 
         var existing = await _db.DiaryEntries.AsNoTracking()
-            .SingleOrDefaultAsync(entry => entry.AuthorUserId == authorUserId && entry.ClientEntryId == clientEntryId.Trim() && entry.DeletedAtUtc == null, cancellationToken)
+            .SingleOrDefaultAsync(entry => entry.AuthorUserId == authorUserId && entry.ClientEntryId == clientEntryId.Trim(), cancellationToken)
             .ConfigureAwait(false);
         if (existing is not null)
         {

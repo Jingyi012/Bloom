@@ -55,7 +55,7 @@ public sealed class EntriesController(IEntryService entryService) : ControllerBa
         catch (InvalidOperationException exception) { return Conflict(exception.Message); }
     }
 
-    /// <summary>Soft-deletes the current user's diary while today's edit window is open.</summary>
+    /// <summary>Permanently deletes the current user's diary while today's edit window is open.</summary>
     [HttpDelete("today")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
