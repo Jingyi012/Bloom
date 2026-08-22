@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { Screen } from '@/components/Screen';
@@ -15,10 +14,11 @@ import { InlineAlert } from '@/components/InlineAlert';
 import { getDeviceTimeZone } from '@/utils/device';
 
 const MOODS = [
-  { key: 'joyful', icon: 'emoticon-excited-outline', color: colors.butter },
-  { key: 'calm', icon: 'weather-sunny', color: colors.sage },
-  { key: 'heavy', icon: 'weather-cloudy', color: colors.lavender },
-  { key: 'restless', icon: 'weather-windy', color: colors.coral },
+  { key: 'heavy', emoji: '😢' },
+  { key: 'restless', emoji: '😐' },
+  { key: 'calm', emoji: '🙂' },
+  { key: 'joyful', emoji: '😄' },
+  { key: 'radiant', emoji: '🤩' },
 ] as const;
 const PROMPTS = [
   { key: 'small_joy', text: 'What small thing made today feel lighter?' },
@@ -196,20 +196,17 @@ export default function WriteScreen() {
       {imageUri ? <Image accessibilityLabel="Selected diary photo" contentFit="cover" source={imageUri} style={styles.photoPreview} /> : null}
 
       <Text style={styles.section}>{t('mood')}</Text>
-      <View style={styles.chipRow}>
+      <View style={styles.moodRow}>
         {MOODS.map(option => (
           <Pressable
-            accessibilityLabel={`Mood ${t(option.key)}`}
+            accessibilityLabel={`Mood ${option.emoji}`}
             accessibilityRole="button"
             accessibilityState={{ selected: mood === option.key }}
             key={option.key}
             onPress={() => setMood(current => current === option.key ? undefined : option.key)}
             style={[styles.moodTile, mood === option.key ? styles.moodTileSelected : null]}
           >
-            <View style={[styles.moodIcon, { backgroundColor: `${option.color}22` }]}>
-              <MaterialCommunityIcons color={option.color} name={option.icon} size={24} />
-            </View>
-            <Text style={[styles.moodLabel, mood === option.key ? styles.moodLabelSelected : null]}>{t(option.key)}</Text>
+            <Text style={styles.moodEmoji}>{option.emoji}</Text>
           </Pressable>
         ))}
       </View>

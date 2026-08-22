@@ -6,7 +6,7 @@ import { screenStyles } from '@/styles/components.styles';
 
 export function Screen({ children, scroll = true }: PropsWithChildren<{ scroll?: boolean }>) {
   const insets = useSafeAreaInsets();
-  const content = <View style={[screenStyles.content, { paddingBottom: 126 + insets.bottom }]}>{children}</View>;
+  const content = <View style={[screenStyles.content, { paddingBottom: 150 + insets.bottom }]}>{children}</View>;
 
   return (
     <SafeAreaView style={screenStyles.safeArea} edges={['top', 'left', 'right']}>

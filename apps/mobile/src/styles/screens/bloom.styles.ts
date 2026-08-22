@@ -9,6 +9,7 @@ export const bloomStyles = StyleSheet.create({
   loading: { alignItems: 'center', flex: 1, justifyContent: 'center' },
   error: { color: colors.coralDark, fontSize: 13, lineHeight: 19, paddingVertical: spacing.lg },
   empty: { color: colors.inkSoft, fontSize: 14, lineHeight: 21, paddingVertical: spacing.xl },
+  listContent: { paddingBottom: 150 },
   card: { ...shadows.card, backgroundColor: colors.card, borderColor: colors.line, borderRadius: 20, borderWidth: 1, marginBottom: spacing.md, padding: spacing.lg },
   authorRow: { alignItems: 'center', flexDirection: 'row' },
   avatar: { alignItems: 'center', backgroundColor: colors.sageLight, borderRadius: 20, height: 40, justifyContent: 'center', marginRight: spacing.sm, width: 40 },
