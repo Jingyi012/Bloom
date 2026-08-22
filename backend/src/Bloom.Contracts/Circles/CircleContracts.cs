@@ -1,11 +1,12 @@
 namespace Bloom.Contracts.Circles;
 
-/// <summary>Request to plant a sealed circle.</summary>
+/// <summary>Request to plant a sealed circle at a creator-selected instant.</summary>
 public sealed record CreateCircleRequest(
     string Name,
     string Emoji,
-    int DurationMonths,
-    string TimeZoneId);
+    DateTimeOffset? BloomAtUtc,
+    string TimeZoneId,
+    int? DurationMonths = null);
 
 /// <summary>Request to invite an existing Bloom user.</summary>
 public sealed record InviteCircleMemberRequest(string Email);

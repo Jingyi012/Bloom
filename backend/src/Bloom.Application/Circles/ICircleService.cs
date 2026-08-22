@@ -6,7 +6,7 @@ namespace Bloom.Application.Circles;
 public interface ICircleService
 {
     /// <summary>Creates a sealed circle with the creator as its first member.</summary>
-    Task<Circle> CreateAsync(Guid creatorUserId, string name, string emoji, int durationMonths, string timeZoneId, CancellationToken cancellationToken);
+    Task<Circle> CreateAsync(Guid creatorUserId, string name, string emoji, DateTimeOffset bloomAtUtc, string timeZoneId, CancellationToken cancellationToken);
 
     /// <summary>Lists circles in which the user is an active member.</summary>
     Task<IReadOnlyList<Circle>> ListForUserAsync(Guid userId, CancellationToken cancellationToken);

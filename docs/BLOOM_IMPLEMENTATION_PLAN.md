@@ -97,11 +97,11 @@ These rules remove ambiguity from the mockup and should be treated as acceptance
 ### 2.1 Circle lifecycle
 
 - A circle has `Draft`, `Sealed`, `Bloomed`, or `Archived` status.
-- The creator chooses a name, emoji, duration/custom date, and IANA time zone.
+- The creator chooses a name, emoji, exact future bloom date/time, and IANA time zone.
 - The API converts the chosen local bloom time to a fixed UTC instant (`BloomAtUtc`).
 - The bloom instant becomes immutable when the circle is planted/activated.
 - Circle state is derived from `BloomAtUtc <= serverNowUtc`; it must not depend only on a scheduled job running successfully.
-- The minimum recommended duration is one month. The supported presets are 1 month, 3 months, 6 months, and 1 year, plus a custom date.
+- The mobile flow uses an exact custom date/time. The API keeps a compatibility path for the original 1/3/6/12-month payloads while older clients are upgraded.
 - Invitations may be accepted after the circle starts, but never after it blooms.
 - A late joiner can only see entries created on or after their `JoinedAtUtc`, matching the mockup copy.
 - When a member leaves before bloom, they immediately lose access. Their entries in that circle become permanently private and are never exposed to the remaining members. Keep the rows for account export/retention purposes, but mark their publications `Withdrawn`.
@@ -150,7 +150,7 @@ These rules remove ambiguity from the mockup and should be treated as acceptance
 - Profile, user name/avatar, time zone, privacy, and appearance preferences.
 - Home dashboard with today's writing call-to-action, upcoming circles, newly bloomed circles, and basic stats.
 - Create a circle with preset/custom bloom date.
-- Invite an existing Bloom user found through in-app user search. Invite links are not included.
+- Invite an existing Bloom user by email. The invitation is delivered in-app; invite links and outbound email are not included.
 - Accept/decline an invitation and view members.
 - Leave a circle with an explicit explanation of the privacy result.
 - Compose a local draft, pick a mood/prompt, attach one photo, and seal it into one or more circles.
@@ -516,11 +516,13 @@ Use a controllable `TimeProvider` throughout so bloom-boundary tests do not depe
 
 ### 7.1 Create and join a circle
 
-1. Creator enters circle identity, members, duration/custom date, and time zone.
-2. Mobile previews the exact local date and fixed time.
+1. Creator enters circle identity, members, exact bloom date/time, and time zone.
+2. Mobile previews the exact local date and time before sending the UTC instant.
 3. API validates the date and creates the circle, creator membership, and invitations in one transaction.
 4. Invitees see pending invitations when the app starts, resumes, or refreshes.
 5. On acceptance, `JoinedAtUtc` establishes the earliest entry they may later see.
+
+The current invitation screen accepts an email for an existing Bloom account. The API normalizes the lookup, rejects self-invites, duplicate members, and duplicate pending invitations, then creates a pending `CircleInvitation`. The invitee accepts or declines it from the Circles tab. Because this stage has no email provider or worker, an address that has not signed in with Google cannot receive an invitation yet and returns a not-found response.
 
 ### 7.2 Seal an entry
 

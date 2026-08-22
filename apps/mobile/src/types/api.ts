@@ -70,7 +70,7 @@ export type CircleInvitation = {
 export type CreateCircleRequest = {
   name: string;
   emoji: string;
-  durationMonths: number;
+  bloomAtUtc: string;
   timeZoneId: string;
 };
 

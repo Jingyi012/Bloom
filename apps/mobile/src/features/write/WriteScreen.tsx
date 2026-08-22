@@ -121,12 +121,19 @@ export default function WriteScreen() {
   }, [currentDraftKey, draftClientEntryId, imageUris, isDraftReady, mood, promptKey, selectedCircleIds, text]);
 
   const selectedCount = useMemo(() => selectedCircleIds.length, [selectedCircleIds.length]);
+  const allCirclesSelected = circles.length > 0 && circles.every(circle => selectedCircleIds.includes(circle.id));
 
   const toggleCircle = useCallback((circleId: string) => {
     setSelectedCircleIds(current => current.includes(circleId)
       ? current.filter(id => id !== circleId)
       : [...current, circleId]);
   }, []);
+
+  const toggleAllCircles = useCallback(() => {
+    setSelectedCircleIds(current => circles.length > 0 && circles.every(circle => current.includes(circle.id))
+      ? []
+      : circles.map(circle => circle.id));
+  }, [circles]);
 
   const submit = useCallback(async () => {
     if (!session?.accessToken) return;
@@ -259,7 +266,12 @@ export default function WriteScreen() {
         <Text style={styles.promptAction}>{promptKey ? 'Change prompt' : 'Choose prompt'}</Text>
       </Pressable>
 
-      <Text style={styles.section}>{t('sealTo')}</Text>
+      <View style={styles.sectionRow}>
+        <Text style={[styles.section, styles.sectionInRow]}>{t('sealTo')}</Text>
+        {circles.length > 0 ? <Pressable accessibilityRole="button" accessibilityLabel={allCirclesSelected ? t('clearAll') : t('selectAll')} onPress={toggleAllCircles}>
+          <Text style={styles.selectAll}>{allCirclesSelected ? t('clearAll') : t('selectAll')}</Text>
+        </Pressable> : null}
+      </View>
       {isLoading ? <ActivityIndicator color={colors.coralDark} /> : null}
       {!isLoading && circles.length === 0 ? <Text style={styles.empty}>Create a sealed circle before writing.</Text> : null}
       {circles.map(circle => {

@@ -21,15 +21,13 @@ public sealed class EfCircleService(
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     /// <inheritdoc />
-    public async Task<Circle> CreateAsync(Guid creatorUserId, string name, string emoji, int durationMonths, string timeZoneId, CancellationToken cancellationToken)
+    public async Task<Circle> CreateAsync(Guid creatorUserId, string name, string emoji, DateTimeOffset bloomAtUtc, string timeZoneId, CancellationToken cancellationToken)
     {
         if (await _googleUserService.FindByIdAsync(creatorUserId, cancellationToken).ConfigureAwait(false) is null)
             throw new InvalidOperationException("The creator does not exist.");
-        if (durationMonths is not (1 or 3 or 6 or 12))
-            throw new ArgumentOutOfRangeException(nameof(durationMonths), "Duration must be 1, 3, 6, or 12 months.");
 
         var now = _timeProvider.GetUtcNow();
-        var circle = Circle.Create(creatorUserId, name, emoji, now.AddMonths(durationMonths), timeZoneId, now);
+        var circle = Circle.Create(creatorUserId, name, emoji, bloomAtUtc, timeZoneId, now);
         _auditStampWriter.StampCreated(circle, creatorUserId);
         var creator = circle.FindMember(creatorUserId) ?? throw new InvalidOperationException("Circle creator membership was not created.");
         _auditStampWriter.StampCreated(creator, creatorUserId);

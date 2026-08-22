@@ -37,16 +37,25 @@ public sealed class CirclesController(
         if (!TryGetUserId(out var userId)) return Unauthorized();
         if (request is null || string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.TimeZoneId))
             return BadRequest("Name and time zone are required.");
+        var bloomAtUtc = request.BloomAtUtc;
+        if (bloomAtUtc is null && request.DurationMonths is int legacyDuration)
+        {
+            if (legacyDuration is not (1 or 3 or 6 or 12))
+                return BadRequest("Choose a future bloom date and time.");
+            bloomAtUtc = _timeProvider.GetUtcNow().AddMonths(legacyDuration);
+        }
+        if (bloomAtUtc is null)
+            return BadRequest("Choose a future bloom date and time.");
         try
         {
-            var circle = await _circleService.CreateAsync(userId, request.Name, request.Emoji, request.DurationMonths, request.TimeZoneId, cancellationToken).ConfigureAwait(false);
+            var circle = await _circleService.CreateAsync(userId, request.Name, request.Emoji, bloomAtUtc.Value, request.TimeZoneId, cancellationToken).ConfigureAwait(false);
             return Created($"/api/v1/circles/{circle.Id:D}", await ToDetailAsync(circle, userId, cancellationToken).ConfigureAwait(false));
         }
-        catch (ArgumentOutOfRangeException exception)
+        catch (InvalidOperationException exception)
         {
             return BadRequest(exception.Message);
         }
-        catch (InvalidOperationException exception)
+        catch (ArgumentException exception)
         {
             return BadRequest(exception.Message);
         }
