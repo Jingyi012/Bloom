@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   Pressable,
   ScrollView,
   Text,
@@ -9,10 +10,11 @@ import {
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Screen } from "@/components/Screen";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
-import type { CircleSummary } from "@/types/api";
+import type { CircleSummary, EntrySubmissionResponse, TodayEntryStatus } from "@/types/api";
 import { colors } from "@/styles/tokens";
 import { writeStyles as styles } from "@/styles/screens/write.styles";
 import {
@@ -70,6 +72,8 @@ export default function WriteScreen() {
   const [mood, setMood] = useState<string | undefined>();
   const [promptKey, setPromptKey] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(true);
+  const [isTodayStatusLoading, setIsTodayStatusLoading] = useState(true);
+  const [todayStatus, setTodayStatus] = useState<TodayEntryStatus | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -80,7 +84,7 @@ export default function WriteScreen() {
   );
   const [isDraftReady, setIsDraftReady] = useState(false);
   const skipNextDraftSave = useRef(false);
-  const localDate = useMemo(() => getLocalDate(), []);
+  const [localDate, setLocalDate] = useState(getLocalDate);
   const currentDraftKey = user ? draftKey(user.id, localDate) : null;
 
   const loadCircles = useCallback(async () => {
@@ -101,9 +105,43 @@ export default function WriteScreen() {
     }
   }, [session?.accessToken, t]);
 
+  const loadTodayStatus = useCallback(async () => {
+    if (!session?.accessToken) return;
+    setIsTodayStatusLoading(true);
+    try {
+      setTodayStatus(await bloomApi.getTodayEntry(session.accessToken));
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : t("todayStatusLoadFailed"),
+      );
+    } finally {
+      setIsTodayStatusLoading(false);
+    }
+  }, [session?.accessToken, t]);
+
   useEffect(() => {
     void loadCircles();
   }, [loadCircles]);
+
+  useEffect(() => {
+    void loadTodayStatus();
+  }, [loadTodayStatus]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      const nextLocalDate = getLocalDate();
+      if (nextLocalDate !== localDate) {
+        setLocalDate(nextLocalDate);
+        setTodayStatus(null);
+      }
+      void loadTodayStatus();
+      void loadCircles();
+    });
+    return () => subscription.remove();
+  }, [loadCircles, loadTodayStatus, localDate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -190,6 +228,7 @@ export default function WriteScreen() {
 
   const submit = useCallback(async () => {
     if (!session?.accessToken) return;
+    if (isTodayStatusLoading || todayStatus?.hasEntry) return;
     if (!text.trim()) {
       setError(t("writeBeforeSealing"));
       return;
@@ -212,13 +251,21 @@ export default function WriteScreen() {
         promptKey,
         circleIds: selectedCircleIds,
       };
+      let result: EntrySubmissionResponse;
       if (imageUris.length > 0)
-        await bloomApi.submitEntryWithMedia(
+        result = await bloomApi.submitEntryWithMedia(
           session.accessToken,
           submission,
           imageUris,
         );
-      else await bloomApi.submitEntry(session.accessToken, submission);
+      else result = await bloomApi.submitEntry(session.accessToken, submission);
+      setTodayStatus({
+        hasEntry: true,
+        authorLocalDate: result.authorLocalDate,
+        diaryEntryId: result.diaryEntryId,
+        submittedAtUtc: result.submittedAtUtc,
+        circleIds: result.circleIds,
+      });
       setText("");
       setMood(undefined);
       setPromptKey(undefined);
@@ -234,11 +281,16 @@ export default function WriteScreen() {
         t("diarySealed"),
       );
     } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : t("diarySealFailed"),
-      );
+      if (submitError instanceof Error && submitError.message.includes("(409)")) {
+        await loadTodayStatus();
+        setNotice(t("todayAlreadySealed"));
+      } else {
+        setError(
+          submitError instanceof Error
+            ? submitError.message
+            : t("diarySealFailed"),
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -252,6 +304,9 @@ export default function WriteScreen() {
     selectedCircleIds,
     session?.accessToken,
     text,
+    isTodayStatusLoading,
+    loadTodayStatus,
+    todayStatus?.hasEntry,
     t,
   ]);
 
@@ -300,6 +355,26 @@ export default function WriteScreen() {
       ) : null}
       {notice ? <InlineAlert message={notice} onDismiss={() => setNotice(null)} variant="success" /> : null}
 
+      {isTodayStatusLoading ? (
+        <View style={styles.statusLoading}>
+          <ActivityIndicator color={colors.coralDark} />
+        </View>
+      ) : todayStatus?.hasEntry ? (
+        <View style={styles.sealedCard}>
+          <View style={styles.sealedIcon}>
+            <MaterialCommunityIcons color={colors.sageDark} name="lock-check-outline" size={28} />
+          </View>
+          <Text style={styles.sealedTitle}>{t("todaySealedTitle")}</Text>
+          <Text style={styles.sealedBody}>{t("todaySealedBody")}</Text>
+          {todayStatus.submittedAtUtc ? (
+            <Text style={styles.sealedMeta}>{formatSubmittedAt(todayStatus.submittedAtUtc)}</Text>
+          ) : null}
+          <Text style={styles.sealedMeta}>
+            {todayStatus.circleIds.length} {t("circles")}
+          </Text>
+        </View>
+      ) : (
+        <>
       <Text style={styles.section}>{t("mood")}</Text>
       <View style={styles.moodRow}>
         {MOODS.map((option) => (
@@ -462,6 +537,12 @@ export default function WriteScreen() {
           </Text>
         )}
       </Pressable>
+        </>
+      )}
     </Screen>
   );
+}
+
+function formatSubmittedAt(value: string): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }

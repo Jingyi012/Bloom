@@ -18,6 +18,7 @@ public sealed class DiaryEntryConfiguration : IEntityTypeConfiguration<DiaryEntr
         builder.Property(entity => entity.Mood).HasMaxLength(32);
         builder.Property(entity => entity.PromptKey).HasMaxLength(128);
         builder.HasIndex(entity => new { entity.AuthorUserId, entity.ClientEntryId }).IsUnique();
+        builder.HasIndex(entity => new { entity.AuthorUserId, entity.AuthorLocalDate }).IsUnique();
         builder.HasOne<User>().WithMany().HasForeignKey(entity => entity.AuthorUserId).OnDelete(DeleteBehavior.Restrict);
     }
 }

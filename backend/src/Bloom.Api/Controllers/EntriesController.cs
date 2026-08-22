@@ -15,6 +15,25 @@ public sealed class EntriesController(IEntryService entryService) : ControllerBa
 {
     private readonly IEntryService _entryService = entryService ?? throw new ArgumentNullException(nameof(entryService));
 
+    /// <summary>Gets the current user's sealed-entry status for today.</summary>
+    [HttpGet("today")]
+    [ProducesResponseType(typeof(TodayEntryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TodayEntryResponse>> GetTodayAsync(CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        try
+        {
+            var status = await _entryService.GetTodayStatusAsync(userId, cancellationToken).ConfigureAwait(false);
+            return Ok(new TodayEntryResponse(status.HasEntry, status.AuthorLocalDate, status.DiaryEntryId, status.SubmittedAtUtc, status.CircleIds));
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+    }
+
     /// <summary>Submits one text entry to one or more sealed circles.</summary>
     [HttpPost]
     [ProducesResponseType(typeof(EntrySubmissionResponse), StatusCodes.Status201Created)]

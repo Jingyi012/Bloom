@@ -30,6 +30,33 @@ public sealed class EfEntryService(
     private readonly IEntryProtector _entryProtector = entryProtector ?? throw new ArgumentNullException(nameof(entryProtector));
 
     /// <inheritdoc />
+    public async Task<TodayEntryStatus> GetTodayStatusAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var user = await _db.Users.AsNoTracking()
+            .SingleOrDefaultAsync(candidate => candidate.Id == userId && candidate.DeletedAtUtc == null, cancellationToken)
+            .ConfigureAwait(false);
+        if (user is null) throw new KeyNotFoundException("user_not_found");
+
+        var now = _timeProvider.GetUtcNow();
+        var timeZone = FindTimeZone(user.TimeZoneId);
+        var localDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, timeZone).DateTime);
+        var entry = await _db.DiaryEntries.AsNoTracking()
+            .Where(candidate => candidate.AuthorUserId == userId && candidate.AuthorLocalDate == localDate && candidate.DeletedAtUtc == null)
+            .OrderByDescending(candidate => candidate.CreatedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (entry is null) return new TodayEntryStatus(false, localDate, null, null, Array.Empty<Guid>());
+
+        var circleIds = await _db.EntryPublications.AsNoTracking()
+            .Where(publication => publication.DiaryEntryId == entry.Id && publication.Status == EntryPublicationStatus.Sealed && publication.DeletedAtUtc == null)
+            .OrderBy(publication => publication.CircleId)
+            .Select(publication => publication.CircleId)
+            .ToArrayAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return new TodayEntryStatus(true, localDate, entry.Id, entry.CreatedAtUtc, circleIds);
+    }
+
+    /// <inheritdoc />
     public async Task<EntrySubmissionResult> SubmitAsync(
         Guid authorUserId,
         string clientEntryId,
@@ -70,6 +97,13 @@ public sealed class EfEntryService(
         if (authorLocalDate != expectedLocalDate)
             throw new InvalidOperationException("Entries must use today's date in the selected time zone.");
 
+        var duplicateDay = await _db.DiaryEntries.AnyAsync(entry =>
+            entry.AuthorUserId == authorUserId
+            && entry.AuthorLocalDate == authorLocalDate
+            && entry.DeletedAtUtc == null, cancellationToken).ConfigureAwait(false);
+        if (duplicateDay)
+            throw new InvalidOperationException("Today's diary is already sealed.");
+
         var circles = await _db.Circles
             .Include(circle => circle.Members)
             .Where(circle => distinctCircleIds.Contains(circle.Id))
@@ -85,14 +119,6 @@ public sealed class EfEntryService(
             if (circle.GetCurrentStatus(now) != CircleStatus.Sealed)
                 throw new InvalidOperationException("Entries can only be submitted to sealed circles.");
         }
-
-        var duplicateDay = await _db.EntryPublications.AnyAsync(publication =>
-            distinctCircleIds.Contains(publication.CircleId)
-            && publication.AuthorUserId == authorUserId
-            && publication.AuthorLocalDate == authorLocalDate
-            && publication.Status == EntryPublicationStatus.Sealed, cancellationToken).ConfigureAwait(false);
-        if (duplicateDay)
-            throw new InvalidOperationException("You already wrote today's entry to one of the selected circles.");
 
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var diaryEntry = DiaryEntry.Create(authorUserId, clientEntryId, authorLocalDate, authorTimeZoneId, _entryProtector.Protect(text), mood, promptKey);

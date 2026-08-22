@@ -18,6 +18,14 @@ public sealed record EntrySubmissionResponse(
     DateOnly AuthorLocalDate,
     DateTimeOffset SubmittedAtUtc);
 
+/// <summary>Safe metadata describing the current user's diary status for today.</summary>
+public sealed record TodayEntryResponse(
+    bool HasEntry,
+    DateOnly AuthorLocalDate,
+    Guid? DiaryEntryId,
+    DateTimeOffset? SubmittedAtUtc,
+    IReadOnlyList<Guid> CircleIds);
+
 /// <summary>One entry returned by a bloomed timeline.</summary>
 public sealed record TimelineEntryResponse(
     Guid PublicationId,

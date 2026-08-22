@@ -6,6 +6,9 @@ namespace Bloom.Application.Entries;
 /// <summary>Coordinates sealed diary entry submissions.</summary>
 public interface IEntryService
 {
+    /// <summary>Gets the current user's sealed-entry status for today.</summary>
+    Task<TodayEntryStatus> GetTodayStatusAsync(Guid userId, CancellationToken cancellationToken);
+
     /// <summary>Submits one text entry to one or more eligible sealed circles.</summary>
     Task<EntrySubmissionResult> SubmitAsync(
         Guid authorUserId,
@@ -60,6 +63,14 @@ public sealed record EntrySubmissionResult(
     IReadOnlyList<Guid> CircleIds,
     DateOnly AuthorLocalDate,
     DateTimeOffset SubmittedAtUtc);
+
+/// <summary>Safe metadata describing whether the current user has sealed today's diary.</summary>
+public sealed record TodayEntryStatus(
+    bool HasEntry,
+    DateOnly AuthorLocalDate,
+    Guid? DiaryEntryId,
+    DateTimeOffset? SubmittedAtUtc,
+    IReadOnlyList<Guid> CircleIds);
 
 /// <summary>One safe, post-bloom timeline item.</summary>
 public sealed record TimelineEntry(

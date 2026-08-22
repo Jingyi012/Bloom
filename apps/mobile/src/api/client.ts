@@ -8,6 +8,7 @@ import type {
   EntrySubmissionRequest,
   EntrySubmissionResponse,
   TimelineResponse,
+  TodayEntryStatus,
   CommentPageResponse,
   Comment as ApiComment,
   Reaction,
@@ -101,6 +102,9 @@ export const bloomApi = {
   }),
   leaveCircle: (accessToken: string, circleId: string) => requestJson<void>(`/circles/${circleId}/leave`, {
     method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  getTodayEntry: (accessToken: string) => requestJson<TodayEntryStatus>('/entries/today', {
     headers: { Authorization: `Bearer ${accessToken}` },
   }),
   submitEntry: (accessToken: string, request: EntrySubmissionRequest) => requestJson<EntrySubmissionResponse>('/entries', {

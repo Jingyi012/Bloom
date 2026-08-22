@@ -101,6 +101,14 @@ export type EntrySubmissionResponse = {
   submittedAtUtc: string;
 };
 
+export type TodayEntryStatus = {
+  hasEntry: boolean;
+  authorLocalDate: string;
+  diaryEntryId: string | null;
+  submittedAtUtc: string | null;
+  circleIds: string[];
+};
+
 export type Reaction = {
   emojiCode: string;
   count: number;
