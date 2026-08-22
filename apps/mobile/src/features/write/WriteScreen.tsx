@@ -165,7 +165,9 @@ export default function WriteScreen() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: false, allowsMultipleSelection: true, selectionLimit: 10 });
-    if (!result.canceled) setImageUris(current => [...current, ...result.assets.map(asset => asset.uri)].slice(0, 10));
+    if (!result.canceled) {
+      setImageUris(current => Array.from(new Set([...current, ...result.assets.map(asset => asset.uri)])).slice(0, 10));
+    }
   }, []);
 
   const removeImage = useCallback((uri: string) => setImageUris(current => current.filter(item => item !== uri)), []);
@@ -178,6 +180,22 @@ export default function WriteScreen() {
 
       {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+
+      <Text style={styles.section}>{t('mood')}</Text>
+      <View style={styles.moodRow}>
+        {MOODS.map(option => (
+          <Pressable
+            accessibilityLabel={`Mood ${option.emoji}`}
+            accessibilityRole="button"
+            accessibilityState={{ selected: mood === option.key }}
+            key={option.key}
+            onPress={() => setMood(current => current === option.key ? undefined : option.key)}
+            style={[styles.moodTile, mood === option.key ? styles.moodTileSelected : null]}
+          >
+            <Text style={styles.moodEmoji}>{option.emoji}</Text>
+          </Pressable>
+        ))}
+      </View>
 
       <TextInput
         accessibilityLabel="Diary entry"
@@ -201,22 +219,6 @@ export default function WriteScreen() {
           <Pressable accessibilityLabel={`Remove photo ${index + 1}`} onPress={() => removeImage(uri)} style={styles.removePhoto}><Text style={styles.removePhotoText}>×</Text></Pressable>
         </View>)}
       </ScrollView> : null}
-
-      <Text style={styles.section}>{t('mood')}</Text>
-      <View style={styles.moodRow}>
-        {MOODS.map(option => (
-          <Pressable
-            accessibilityLabel={`Mood ${option.emoji}`}
-            accessibilityRole="button"
-            accessibilityState={{ selected: mood === option.key }}
-            key={option.key}
-            onPress={() => setMood(current => current === option.key ? undefined : option.key)}
-            style={[styles.moodTile, mood === option.key ? styles.moodTileSelected : null]}
-          >
-            <Text style={styles.moodEmoji}>{option.emoji}</Text>
-          </Pressable>
-        ))}
-      </View>
 
       <Text style={styles.section}>{t('prompt')}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Choose writing prompt" onPress={() => {
