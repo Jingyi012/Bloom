@@ -275,14 +275,23 @@ function formatTime(value: string): string {
 
 function formatCommentTime(value: string, language: 'en' | 'zh'): string {
   const createdAt = new Date(value).getTime();
-  const elapsedSeconds = (createdAt - Date.now()) / 1000;
+  if (!Number.isFinite(createdAt)) return '';
+  const elapsedSeconds = Math.max(0, (Date.now() - createdAt) / 1000);
   const absoluteSeconds = Math.abs(elapsedSeconds);
   const locale = language === 'zh' ? 'zh-CN' : 'en';
-  const relative = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
-  if (absoluteSeconds < 60) return relative.format(Math.round(elapsedSeconds), 'second');
-  if (absoluteSeconds < 60 * 60) return relative.format(Math.round(elapsedSeconds / 60), 'minute');
-  if (absoluteSeconds < 60 * 60 * 24) return relative.format(Math.round(elapsedSeconds / (60 * 60)), 'hour');
-  if (absoluteSeconds < 60 * 60 * 24 * 7) return relative.format(Math.round(elapsedSeconds / (60 * 60 * 24)), 'day');
+  if (absoluteSeconds < 60) return language === 'zh' ? '刚刚' : 'Just now';
+  if (absoluteSeconds < 60 * 60) {
+    const minutes = Math.max(1, Math.floor(absoluteSeconds / 60));
+    return language === 'zh' ? `${minutes}分钟前` : `${minutes}m ago`;
+  }
+  if (absoluteSeconds < 60 * 60 * 24) {
+    const hours = Math.max(1, Math.floor(absoluteSeconds / (60 * 60)));
+    return language === 'zh' ? `${hours}小时前` : `${hours}h ago`;
+  }
+  if (absoluteSeconds < 60 * 60 * 24 * 7) {
+    const days = Math.max(1, Math.floor(absoluteSeconds / (60 * 60 * 24)));
+    return language === 'zh' ? `${days}天前` : `${days}d ago`;
+  }
   return new Intl.DateTimeFormat(locale, { day: 'numeric', hour: 'numeric', minute: '2-digit', month: 'short' }).format(new Date(value));
 }
 
