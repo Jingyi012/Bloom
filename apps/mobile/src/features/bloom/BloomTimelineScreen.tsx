@@ -1,4 +1,5 @@
 import { FlashList } from "@shopify/flash-list";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -118,7 +119,7 @@ export default function BloomTimelineScreen() {
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <Text style={styles.backIcon}>‹</Text>
+          <MaterialCommunityIcons color={colors.ink} name="arrow-left" size={19} />
         </Pressable>
         <Text numberOfLines={1} style={styles.topBarTitle}>
           {circleName || t("timelineTitle")} {circleEmoji || "🌸"}

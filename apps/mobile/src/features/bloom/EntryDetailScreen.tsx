@@ -18,7 +18,7 @@ export default function EntryDetailScreen() {
   const publicationId = Array.isArray(rawPublicationId) ? rawPublicationId[0] : rawPublicationId;
   const router = useRouter();
   const { session } = useAuth();
-  const { t } = useSettings();
+  const { language, t } = useSettings();
   const [entry, setEntry] = useState<TimelineEntry | null>(null);
   const [comments, setComments] = useState<ApiComment[]>([]);
   const [draft, setDraft] = useState('');
@@ -212,7 +212,10 @@ export default function EntryDetailScreen() {
                   <View key={comment.id} style={styles.comment}>
                     <Avatar uri={comment.authorAvatarUrl} style={styles.commentAvatar} imageStyle={styles.commentAvatarImage} />
                     <View style={styles.commentBubble}>
-                      <Text style={styles.commentAuthor}>{comment.authorDisplayName}</Text>
+                      <View style={styles.commentMeta}>
+                        <Text style={styles.commentAuthor}>{comment.authorDisplayName}</Text>
+                        <Text style={styles.commentTime}>{formatCommentTime(comment.createdAtUtc, language)}</Text>
+                      </View>
                       <Text style={styles.commentBody}>{comment.body}</Text>
                     </View>
                   </View>
@@ -268,6 +271,19 @@ function formatDate(value: string): string {
 
 function formatTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }).format(new Date(value));
+}
+
+function formatCommentTime(value: string, language: 'en' | 'zh'): string {
+  const createdAt = new Date(value).getTime();
+  const elapsedSeconds = (createdAt - Date.now()) / 1000;
+  const absoluteSeconds = Math.abs(elapsedSeconds);
+  const locale = language === 'zh' ? 'zh-CN' : 'en';
+  const relative = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  if (absoluteSeconds < 60) return relative.format(Math.round(elapsedSeconds), 'second');
+  if (absoluteSeconds < 60 * 60) return relative.format(Math.round(elapsedSeconds / 60), 'minute');
+  if (absoluteSeconds < 60 * 60 * 24) return relative.format(Math.round(elapsedSeconds / (60 * 60)), 'hour');
+  if (absoluteSeconds < 60 * 60 * 24 * 7) return relative.format(Math.round(elapsedSeconds / (60 * 60 * 24)), 'day');
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', hour: 'numeric', minute: '2-digit', month: 'short' }).format(new Date(value));
 }
 
 function moodEmoji(mood: string): string {
