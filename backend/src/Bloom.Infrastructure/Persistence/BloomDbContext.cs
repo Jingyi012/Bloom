@@ -38,9 +38,6 @@ public sealed class BloomDbContext(DbContextOptions<BloomDbContext> options) : D
     /// <summary>Gets persisted media assets.</summary>
     public DbSet<MediaAsset> MediaAssets => Set<MediaAsset>();
 
-    /// <summary>Gets persisted entry-media links.</summary>
-    public DbSet<EntryMedia> EntryMedia => Set<EntryMedia>();
-
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

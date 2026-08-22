@@ -1,5 +1,4 @@
 using Bloom.Domain.Entries;
-using Bloom.Domain.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -12,10 +11,12 @@ public sealed class MediaAssetConfiguration : IEntityTypeConfiguration<MediaAsse
     public void Configure(EntityTypeBuilder<MediaAsset> builder)
     {
         builder.Configure(nameof(MediaAsset));
+        builder.Property(entity => entity.SortOrder).IsRequired();
         builder.Property(entity => entity.RelativePath).HasMaxLength(500).IsRequired();
         builder.Property(entity => entity.ContentType).HasMaxLength(100).IsRequired();
         builder.Property(entity => entity.Sha256).HasMaxLength(128).IsRequired();
         builder.HasIndex(entity => entity.RelativePath).IsUnique();
-        builder.HasOne<User>().WithMany().HasForeignKey(entity => entity.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(entity => new { entity.DiaryEntryId, entity.SortOrder }).IsUnique();
+        builder.HasOne<DiaryEntry>().WithMany().HasForeignKey(entity => entity.DiaryEntryId).OnDelete(DeleteBehavior.Cascade);
     }
 }

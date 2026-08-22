@@ -9,8 +9,11 @@ public sealed class MediaAsset : AuditableEntity
     {
     }
 
-    /// <summary>Gets the owning user.</summary>
-    public Guid OwnerUserId { get; private set; }
+    /// <summary>Gets the diary entry that owns this media asset.</summary>
+    public Guid DiaryEntryId { get; private set; }
+
+    /// <summary>Gets the display order within the diary entry.</summary>
+    public int SortOrder { get; private set; }
 
     /// <summary>Gets the generated relative storage key.</summary>
     public string RelativePath { get; private set; } = string.Empty;
@@ -24,14 +27,15 @@ public sealed class MediaAsset : AuditableEntity
     /// <summary>Gets the SHA-256 digest of the protected payload.</summary>
     public string Sha256 { get; private set; } = string.Empty;
 
-    /// <summary>Creates media metadata.</summary>
-    public static MediaAsset Create(Guid ownerUserId, string relativePath, string contentType, long sizeBytes, string sha256)
+    /// <summary>Creates media metadata owned by a diary entry.</summary>
+    public static MediaAsset Create(Guid diaryEntryId, int sortOrder, string relativePath, string contentType, long sizeBytes, string sha256)
     {
-        if (ownerUserId == Guid.Empty) throw new ArgumentException("Owner is required.", nameof(ownerUserId));
+        if (diaryEntryId == Guid.Empty) throw new ArgumentException("Diary entry is required.", nameof(diaryEntryId));
+        if (sortOrder < 0) throw new ArgumentOutOfRangeException(nameof(sortOrder));
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
         ArgumentException.ThrowIfNullOrWhiteSpace(sha256);
         if (sizeBytes <= 0) throw new ArgumentOutOfRangeException(nameof(sizeBytes));
-        return new MediaAsset { OwnerUserId = ownerUserId, RelativePath = relativePath, ContentType = contentType, SizeBytes = sizeBytes, Sha256 = sha256 };
+        return new MediaAsset { DiaryEntryId = diaryEntryId, SortOrder = sortOrder, RelativePath = relativePath, ContentType = contentType, SizeBytes = sizeBytes, Sha256 = sha256 };
     }
 }

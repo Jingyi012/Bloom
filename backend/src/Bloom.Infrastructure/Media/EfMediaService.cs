@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Bloom.Infrastructure.Media;
 
-/// <summary>Authorizes and reads media linked to bloomed publications.</summary>
+/// <summary>Authorizes and reads media attached to bloomed diary entries.</summary>
 public sealed class EfMediaService(BloomDbContext db, IEntryService entryService, IImageStorage imageStorage) : IMediaService
 {
     private readonly BloomDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
@@ -15,13 +15,16 @@ public sealed class EfMediaService(BloomDbContext db, IEntryService entryService
     /// <inheritdoc />
     public async Task<MediaContent?> GetContentAsync(Guid userId, Guid mediaId, CancellationToken cancellationToken)
     {
-        // One upload is shared by every publication created for the selected circles.
-        // Therefore a media asset can have multiple active links; requiring a single
-        // link causes valid multi-circle entries to fail with Sequence contains more
-        // than one element. Authorize the asset when any linked publication is visible.
-        var publicationIds = await _db.EntryMedia.AsNoTracking()
-            .Where(candidate => candidate.MediaAssetId == mediaId && candidate.DeletedAtUtc == null)
-            .Select(candidate => candidate.EntryPublicationId)
+        // One upload belongs to the diary entry and is visible through any of that
+        // entry's circle publications. Authorize the asset when any publication is visible.
+        var asset = await _db.MediaAssets.AsNoTracking()
+            .SingleOrDefaultAsync(candidate => candidate.Id == mediaId && candidate.DeletedAtUtc == null, cancellationToken)
+            .ConfigureAwait(false);
+        if (asset is null) return null;
+
+        var publicationIds = await _db.EntryPublications.AsNoTracking()
+            .Where(candidate => candidate.DiaryEntryId == asset.DiaryEntryId)
+            .Select(candidate => candidate.Id)
             .Distinct()
             .ToArrayAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -57,8 +60,6 @@ public sealed class EfMediaService(BloomDbContext db, IEntryService entryService
             return null;
         }
 
-        var asset = await _db.MediaAssets.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == mediaId && candidate.DeletedAtUtc == null, cancellationToken).ConfigureAwait(false);
-        if (asset is null) return null;
         return new MediaContent(await _imageStorage.ReadAsync(asset.RelativePath, cancellationToken).ConfigureAwait(false), asset.ContentType);
     }
 }

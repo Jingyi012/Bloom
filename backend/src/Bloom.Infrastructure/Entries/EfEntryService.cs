@@ -139,7 +139,7 @@ public sealed class EfEntryService(
         if (images.Count == 0) throw new ArgumentException("At least one image is required.", nameof(images));
         if (images.Count > 10) throw new ArgumentException("You can attach up to 10 images.", nameof(images));
         var result = await SubmitAsync(authorUserId, clientEntryId, authorLocalDate, authorTimeZoneId, text, mood, promptKey, circleIds, cancellationToken).ConfigureAwait(false);
-        if (await _db.EntryMedia.AnyAsync(media => result.PublicationIds.Contains(media.EntryPublicationId) && media.DeletedAtUtc == null, cancellationToken).ConfigureAwait(false))
+        if (await _db.MediaAssets.AnyAsync(media => media.DiaryEntryId == result.DiaryEntryId && media.DeletedAtUtc == null, cancellationToken).ConfigureAwait(false))
             return result;
 
         var storedImages = new List<StoredImage>();
@@ -152,15 +152,9 @@ public sealed class EfEntryService(
                 {
                     var stored = await _imageStorage.SaveAsync(authorUserId, image.Content, image.ContentType, cancellationToken).ConfigureAwait(false);
                     storedImages.Add(stored);
-                    var asset = MediaAsset.Create(authorUserId, stored.RelativePath, stored.ContentType, stored.SizeBytes, stored.Sha256);
+                    var asset = MediaAsset.Create(result.DiaryEntryId, sortOrder, stored.RelativePath, stored.ContentType, stored.SizeBytes, stored.Sha256);
                     _auditStampWriter.StampCreated(asset, authorUserId);
                     _db.MediaAssets.Add(asset);
-                    foreach (var publicationId in result.PublicationIds)
-                    {
-                        var link = EntryMedia.Create(publicationId, asset.Id, sortOrder);
-                        _auditStampWriter.StampCreated(link, authorUserId);
-                        _db.EntryMedia.Add(link);
-                    }
                 }
                 sortOrder++;
             }
@@ -306,9 +300,10 @@ public sealed class EfEntryService(
             .ToArrayAsync(cancellationToken).ConfigureAwait(false);
         var commentCounts = await _db.Comments.AsNoTracking().Where(comment => publicationIds.Contains(comment.EntryPublicationId) && comment.DeletedAtUtc == null && !comment.IsHidden)
             .GroupBy(comment => comment.EntryPublicationId).Select(group => new { PublicationId = group.Key, Count = group.Count() }).ToDictionaryAsync(item => item.PublicationId, item => item.Count, cancellationToken).ConfigureAwait(false);
-        var mediaRows = await _db.EntryMedia.AsNoTracking().Where(media => publicationIds.Contains(media.EntryPublicationId) && media.DeletedAtUtc == null)
-            .OrderBy(media => media.SortOrder).Select(media => new { media.EntryPublicationId, media.MediaAssetId, media.SortOrder }).ToArrayAsync(cancellationToken).ConfigureAwait(false);
-        var mediaIds = mediaRows.GroupBy(media => media.EntryPublicationId).ToDictionary(group => group.Key, group => group.OrderBy(media => media.SortOrder).Select(media => media.MediaAssetId).ToArray());
+        var diaryEntryIds = rows.Select(row => (Guid)row.diaryEntry.Id).Distinct().ToArray();
+        var mediaRows = await _db.MediaAssets.AsNoTracking().Where(media => diaryEntryIds.Contains(media.DiaryEntryId) && media.DeletedAtUtc == null)
+            .OrderBy(media => media.SortOrder).Select(media => new { media.DiaryEntryId, media.Id, media.SortOrder }).ToArrayAsync(cancellationToken).ConfigureAwait(false);
+        var mediaIds = mediaRows.GroupBy(media => media.DiaryEntryId).ToDictionary(group => group.Key, group => group.OrderBy(media => media.SortOrder).Select(media => media.Id).ToArray());
         return rows.Select(row => new TimelineEntry(
             row.publication.Id,
             row.diaryEntry.Id,
@@ -319,7 +314,7 @@ public sealed class EfEntryService(
             row.publication.SubmittedAtUtc,
             _entryProtector.Unprotect(row.diaryEntry.Text),
             row.diaryEntry.Mood,
-            mediaIds.TryGetValue((Guid)row.publication.Id, out var publicationMediaIds) ? publicationMediaIds : Array.Empty<Guid>(),
+            mediaIds.TryGetValue((Guid)row.diaryEntry.Id, out var diaryMediaIds) ? diaryMediaIds : Array.Empty<Guid>(),
             reactions.Where(reaction => reaction.EntryPublicationId == row.publication.Id).Select(reaction => new ReactionSummary(reaction.EmojiCode, reaction.Count, reaction.Reacted)).ToArray(),
             (commentCounts.ContainsKey((Guid)row.publication.Id) ? commentCounts[(Guid)row.publication.Id] : 0))).ToArray();
     }
