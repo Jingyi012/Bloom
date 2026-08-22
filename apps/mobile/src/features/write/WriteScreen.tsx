@@ -27,6 +27,7 @@ import {
 import { useSettings } from "@/settings/SettingsProvider";
 import { InlineAlert } from "@/components/InlineAlert";
 import { getDeviceTimeZone } from "@/utils/device";
+import { formatLocalDateTime } from "@/utils/date";
 
 const MOODS = [
   { key: "heavy", emoji: "😢" },
@@ -598,5 +599,5 @@ export default function WriteScreen() {
 }
 
 function formatSubmittedAt(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return formatLocalDateTime(value);
 }

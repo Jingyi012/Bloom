@@ -20,6 +20,7 @@ import { bloomStyles as styles } from "@/styles/screens/bloom.styles";
 import { InlineAlert } from "@/components/InlineAlert";
 import { useSettings } from "@/settings/SettingsProvider";
 import { REACTION_OPTIONS, type ReactionCode } from "@/features/bloom/reactions";
+import { formatLocalDate, formatLocalTime } from "@/utils/date";
 
 export default function BloomTimelineScreen() {
   const { circleId, circleName, circleEmoji } = useLocalSearchParams<{
@@ -310,15 +311,11 @@ const DateDivider = memo(function DateDivider({ date }: { date: string }) {
 });
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
-    new Date(`${value}T12:00:00`),
-  );
+  return formatLocalDate(value);
 }
 
 function formatTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(
-    new Date(value),
-  );
+  return formatLocalTime(value);
 }
 
 function moodEmoji(mood: string): string {

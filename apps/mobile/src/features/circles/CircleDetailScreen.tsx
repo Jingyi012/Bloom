@@ -17,6 +17,7 @@ import { colors } from "@/styles/tokens";
 import { circleDetailStyles as styles } from "@/styles/screens/circle-detail.styles";
 import { InlineAlert } from "@/components/InlineAlert";
 import { useSettings } from "@/settings/SettingsProvider";
+import { formatLocalDate } from "@/utils/date";
 
 export default function CircleDetailScreen() {
   const { circleId } = useLocalSearchParams<{ circleId: string }>();
@@ -273,7 +274,5 @@ export default function CircleDetailScreen() {
 }
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
-    new Date(value),
-  );
+  return formatLocalDate(value);
 }

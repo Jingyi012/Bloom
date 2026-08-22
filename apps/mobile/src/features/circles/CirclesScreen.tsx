@@ -21,6 +21,7 @@ import { circlesStyles as styles } from "@/styles/screens/circles.styles";
 import { useSettings } from "@/settings/SettingsProvider";
 import { InlineAlert } from "@/components/InlineAlert";
 import { getDeviceTimeZone } from "@/utils/device";
+import { formatLocalDate, formatLocalTime } from "@/utils/date";
 
 function getDefaultBloomDate(): Date {
   const date = new Date();
@@ -30,16 +31,11 @@ function getDefaultBloomDate(): Date {
 }
 
 function formatBloomDate(value: Date): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
-    value,
-  );
+  return formatLocalDate(value);
 }
 
 function formatBloomTime(value: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(value);
+  return formatLocalTime(value);
 }
 
 export default function CirclesScreen() {
@@ -370,7 +366,5 @@ function CircleCard({
 }
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
-    new Date(value),
-  );
+  return formatLocalDate(value);
 }

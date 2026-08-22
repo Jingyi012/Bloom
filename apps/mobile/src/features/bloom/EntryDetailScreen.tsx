@@ -12,6 +12,7 @@ import { colors } from '@/styles/tokens';
 import { entryDetailStyles as styles } from '@/styles/screens/entry-detail.styles';
 import { useSettings } from '@/settings/SettingsProvider';
 import { REACTION_OPTIONS, type ReactionCode } from '@/features/bloom/reactions';
+import { formatLocalCommentTime, formatLocalDate, formatLocalTime } from '@/utils/date';
 
 export default function EntryDetailScreen() {
   const { publicationId: rawPublicationId } = useLocalSearchParams<{ publicationId?: string | string[] }>();
@@ -214,7 +215,7 @@ export default function EntryDetailScreen() {
                     <View style={styles.commentBubble}>
                       <View style={styles.commentMeta}>
                         <Text style={styles.commentAuthor}>{comment.authorDisplayName}</Text>
-                        <Text style={styles.commentTime}>{formatCommentTime(comment.createdAtUtc, language)}</Text>
+                        <Text style={styles.commentTime}>{formatLocalCommentTime(comment.createdAtUtc, language)}</Text>
                       </View>
                       <Text style={styles.commentBody}>{comment.body}</Text>
                     </View>
@@ -266,33 +267,11 @@ function Avatar({ uri, style, imageStyle }: { uri: string | null; style: object;
 }
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(`${value}T12:00:00`));
+  return formatLocalDate(value);
 }
 
 function formatTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { timeStyle: 'short' }).format(new Date(value));
-}
-
-function formatCommentTime(value: string, language: 'en' | 'zh'): string {
-  const createdAt = new Date(value).getTime();
-  if (!Number.isFinite(createdAt)) return '';
-  const elapsedSeconds = Math.max(0, (Date.now() - createdAt) / 1000);
-  const absoluteSeconds = Math.abs(elapsedSeconds);
-  const locale = language === 'zh' ? 'zh-CN' : 'en';
-  if (absoluteSeconds < 60) return language === 'zh' ? '刚刚' : 'Just now';
-  if (absoluteSeconds < 60 * 60) {
-    const minutes = Math.max(1, Math.floor(absoluteSeconds / 60));
-    return language === 'zh' ? `${minutes}分钟前` : `${minutes}m ago`;
-  }
-  if (absoluteSeconds < 60 * 60 * 24) {
-    const hours = Math.max(1, Math.floor(absoluteSeconds / (60 * 60)));
-    return language === 'zh' ? `${hours}小时前` : `${hours}h ago`;
-  }
-  if (absoluteSeconds < 60 * 60 * 24 * 7) {
-    const days = Math.max(1, Math.floor(absoluteSeconds / (60 * 60 * 24)));
-    return language === 'zh' ? `${days}天前` : `${days}d ago`;
-  }
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', hour: 'numeric', minute: '2-digit', month: 'short' }).format(new Date(value));
+  return formatLocalTime(value);
 }
 
 function moodEmoji(mood: string): string {

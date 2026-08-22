@@ -16,6 +16,7 @@ import { homeStyles as styles } from "@/styles/screens/home.styles";
 import { useSettings } from "@/settings/SettingsProvider";
 import type { TranslationKey } from "@/settings/SettingsProvider";
 import { InlineAlert } from "@/components/InlineAlert";
+import { formatLocalDate } from "@/utils/date";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -213,7 +214,5 @@ function greeting(
   return hour < 12 ? t("morning") : hour < 18 ? t("afternoon") : t("evening");
 }
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
-    new Date(value),
-  );
+  return formatLocalDate(value);
 }
