@@ -76,6 +76,10 @@ public sealed class CirclesController(
         {
             return NotFound(exception.Message);
         }
+        catch (UnauthorizedAccessException exception)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, exception.Message);
+        }
         catch (InvalidOperationException exception)
         {
             return Conflict(exception.Message);

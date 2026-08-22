@@ -152,7 +152,7 @@ export default function CirclesScreen() {
           ListHeaderComponent={header}
           onRefresh={() => void load(true)}
           refreshing={isRefreshing}
-          renderItem={({ item }) => <CircleCard circle={item} onPress={() => item.status === 'Bloomed' ? router.push({ pathname: '/circle/[circleId]', params: { circleId: item.id } }) : undefined} />}
+          renderItem={({ item }) => <CircleCard circle={item} onPress={() => router.push({ pathname: '/circle-detail/[circleId]', params: { circleId: item.id } })} />}
           showsVerticalScrollIndicator={false}
         />
       )}

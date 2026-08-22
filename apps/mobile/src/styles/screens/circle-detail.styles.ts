@@ -1,0 +1,31 @@
+import { StyleSheet } from 'react-native';
+import { colors, spacing } from '@/styles/tokens';
+
+export const circleDetailStyles = StyleSheet.create({
+  back: { color: colors.coralDark, fontSize: 13, fontWeight: '800', marginBottom: spacing.lg },
+  hero: { alignItems: 'center', backgroundColor: colors.cardWarm, borderRadius: 24, padding: spacing.xl },
+  emoji: { fontSize: 46 },
+  title: { color: colors.ink, fontSize: 26, fontWeight: '700', marginTop: spacing.sm, textAlign: 'center' },
+  status: { color: colors.sageDark, fontSize: 11, fontWeight: '800', letterSpacing: 2, marginTop: spacing.sm },
+  bloomDate: { color: colors.inkSoft, fontSize: 13, marginTop: spacing.xs },
+  progressTrack: { backgroundColor: colors.card, borderRadius: 5, height: 10, marginTop: spacing.lg, overflow: 'hidden', width: '100%' },
+  progressFill: { backgroundColor: colors.sage, borderRadius: 5, height: '100%' },
+  progressLabel: { color: colors.sageDark, fontSize: 12, fontWeight: '800', marginTop: spacing.sm },
+  section: { color: colors.inkSoft, fontSize: 12, fontWeight: '800', letterSpacing: 1, marginTop: spacing.xl, textTransform: 'uppercase' },
+  member: { alignItems: 'center', backgroundColor: colors.card, borderColor: colors.line, borderRadius: 16, borderWidth: 1, flexDirection: 'row', marginTop: spacing.sm, padding: spacing.md },
+  avatar: { alignItems: 'center', backgroundColor: colors.sageLight, borderRadius: 18, height: 36, justifyContent: 'center', marginRight: spacing.sm, width: 36 },
+  avatarText: { color: colors.sageDark, fontSize: 14, fontWeight: '800' },
+  memberCopy: { flex: 1 },
+  memberName: { color: colors.ink, fontSize: 14, fontWeight: '700' },
+  memberMeta: { color: colors.inkSoft, fontSize: 11, marginTop: 2 },
+  form: { backgroundColor: colors.lavenderLight, borderRadius: 18, marginTop: spacing.md, padding: spacing.md },
+  input: { backgroundColor: colors.card, borderColor: colors.line, borderRadius: 12, borderWidth: 1, color: colors.ink, fontSize: 14, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  inviteButton: { alignItems: 'center', backgroundColor: colors.sageDark, borderRadius: 12, marginTop: spacing.sm, minHeight: 42, justifyContent: 'center' },
+  inviteButtonText: { color: colors.card, fontSize: 13, fontWeight: '800' },
+  action: { alignItems: 'center', backgroundColor: colors.coral, borderRadius: 15, marginTop: spacing.xl, minHeight: 50, justifyContent: 'center' },
+  actionText: { color: colors.card, fontSize: 14, fontWeight: '800' },
+  danger: { alignItems: 'center', borderColor: colors.coralDark, borderRadius: 15, borderWidth: 1, marginTop: spacing.md, minHeight: 50, justifyContent: 'center' },
+  dangerText: { color: colors.coralDark, fontSize: 14, fontWeight: '800' },
+  loading: { alignItems: 'center', flex: 1, justifyContent: 'center' },
+  error: { color: colors.coralDark, fontSize: 13, lineHeight: 20, marginTop: spacing.lg },
+});

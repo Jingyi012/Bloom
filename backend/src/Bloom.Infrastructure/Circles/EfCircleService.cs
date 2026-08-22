@@ -70,6 +70,8 @@ public sealed class EfCircleService(
             ?? throw new KeyNotFoundException("No Bloom user exists with that email.");
         var circle = await GetForUserAsync(circleId, inviterUserId, cancellationToken).ConfigureAwait(false)
             ?? throw new KeyNotFoundException("Circle not found.");
+        if (circle.CreatorUserId != inviterUserId)
+            throw new UnauthorizedAccessException("Only the circle creator can invite members.");
         if (circle.GetCurrentStatus(_timeProvider.GetUtcNow()) == CircleStatus.Bloomed)
             throw new InvalidOperationException("A bloomed circle cannot accept invitations.");
         if (invitee.Id == inviterUserId)

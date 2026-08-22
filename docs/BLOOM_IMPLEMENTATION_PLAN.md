@@ -76,6 +76,10 @@ The release-hardening slice is now implemented:
 
 The current release still intentionally excludes push workers, cloud media, keepsakes/share links, and AI summaries as agreed in the product boundary.
 
+### Next phase checkpoint — dashboard, circle detail, and drafts
+
+The follow-up UX slice adds a data-backed Home dashboard, circle detail/member management, creator-only invitations, leave-circle confirmation, prompt selection, and device-local draft autosave/recovery. Draft bodies and selected photo references are removed after a successful seal and retained for retry when submission fails.
+
 ## 1. Product summary
 
 Bloom is a private, delayed-sharing diary for small groups. A user creates a **circle**, invites friends, chooses an immutable **bloom date**, and writes entries into that circle while it is sealed. When the server reaches the bloom time, eligible members can read the entries together in a shared timeline and add reactions or comments.

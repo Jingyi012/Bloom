@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
@@ -8,8 +8,14 @@ import { bloomApi } from '@/api/client';
 import type { CircleSummary } from '@/types/api';
 import { colors } from '@/styles/tokens';
 import { writeStyles as styles } from '@/styles/screens/write.styles';
+import { clearWriteDraft, draftKey, readWriteDraft, saveWriteDraft } from '@/features/write/draftStorage';
 
 const MOODS = ['joyful', 'calm', 'heavy', 'restless'] as const;
+const PROMPTS = [
+  { key: 'small_joy', text: 'What small thing made today feel lighter?' },
+  { key: 'learned', text: 'What did today teach you about yourself?' },
+  { key: 'future', text: 'What do you hope your future self remembers?' },
+] as const;
 
 function createClientEntryId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -23,16 +29,22 @@ function getLocalDate() {
 }
 
 export default function WriteScreen() {
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const [circles, setCircles] = useState<CircleSummary[]>([]);
   const [selectedCircleIds, setSelectedCircleIds] = useState<string[]>([]);
   const [text, setText] = useState('');
   const [mood, setMood] = useState<string | undefined>();
+  const [promptKey, setPromptKey] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [draftClientEntryId, setDraftClientEntryId] = useState<string | null>(null);
+  const [isDraftReady, setIsDraftReady] = useState(false);
+  const skipNextDraftSave = useRef(false);
+  const localDate = useMemo(() => getLocalDate(), []);
+  const currentDraftKey = user ? draftKey(user.id, localDate) : null;
 
   const loadCircles = useCallback(async () => {
     if (!session?.accessToken) return;
@@ -49,6 +61,40 @@ export default function WriteScreen() {
   }, [session?.accessToken]);
 
   useEffect(() => { void loadCircles(); }, [loadCircles]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsDraftReady(false);
+    if (!currentDraftKey) return;
+    void readWriteDraft(currentDraftKey).then(draft => {
+      if (cancelled) return;
+      if (draft) {
+        setDraftClientEntryId(draft.clientEntryId);
+        setText(draft.text);
+        setMood(draft.mood);
+        setPromptKey(draft.promptKey);
+        setSelectedCircleIds(draft.selectedCircleIds);
+        setImageUri(draft.imageUri ?? null);
+        if (draft.text || draft.imageUri) setNotice('Your unfinished page was restored on this device.');
+      }
+      setIsDraftReady(true);
+    });
+    return () => { cancelled = true; };
+  }, [currentDraftKey]);
+
+  useEffect(() => {
+    if (!isDraftReady || !currentDraftKey) return;
+    if (skipNextDraftSave.current) {
+      skipNextDraftSave.current = false;
+      return;
+    }
+    const clientEntryId = draftClientEntryId ?? createClientEntryId();
+    if (!draftClientEntryId) setDraftClientEntryId(clientEntryId);
+    const handle = setTimeout(() => {
+      void saveWriteDraft(currentDraftKey, { clientEntryId, text, mood, promptKey, selectedCircleIds, imageUri: imageUri ?? undefined });
+    }, 350);
+    return () => clearTimeout(handle);
+  }, [currentDraftKey, draftClientEntryId, imageUri, isDraftReady, mood, promptKey, selectedCircleIds, text]);
 
   const selectedCount = useMemo(() => selectedCircleIds.length, [selectedCircleIds.length]);
 
@@ -74,26 +120,33 @@ export default function WriteScreen() {
     setNotice(null);
     try {
       const submission = {
-        clientEntryId: createClientEntryId(),
-        authorLocalDate: getLocalDate(),
+        clientEntryId: draftClientEntryId ?? createClientEntryId(),
+        authorLocalDate: localDate,
         authorTimeZoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
         text: text.trim(),
         mood,
+        promptKey,
         circleIds: selectedCircleIds,
       };
       if (imageUri) await bloomApi.submitEntryWithMedia(session.accessToken, submission, imageUri);
       else await bloomApi.submitEntry(session.accessToken, submission);
       setText('');
       setMood(undefined);
+      setPromptKey(undefined);
       setSelectedCircleIds([]);
       setImageUri(null);
+      setDraftClientEntryId(null);
+      if (currentDraftKey) {
+        skipNextDraftSave.current = true;
+        await clearWriteDraft(currentDraftKey);
+      }
       setNotice('Sealed. You can read this page again when your circles bloom.');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Could not seal today’s page.');
     } finally {
       setIsSubmitting(false);
     }
-  }, [imageUri, mood, selectedCircleIds, session?.accessToken, text]);
+  }, [currentDraftKey, draftClientEntryId, imageUri, localDate, mood, promptKey, selectedCircleIds, session?.accessToken, text]);
 
   const pickImage = useCallback(async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -147,6 +200,16 @@ export default function WriteScreen() {
           </Pressable>
         ))}
       </View>
+
+      <Text style={styles.section}>A gentle prompt (optional)</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Choose writing prompt" onPress={() => {
+        const currentIndex = PROMPTS.findIndex(prompt => prompt.key === promptKey);
+        const nextPrompt = PROMPTS[(currentIndex + 1) % PROMPTS.length] ?? PROMPTS[0]!;
+        setPromptKey(nextPrompt.key);
+      }} style={styles.prompt}>
+        <Text style={styles.promptText}>{PROMPTS.find(prompt => prompt.key === promptKey)?.text ?? 'Tap for a gentle question to begin.'}</Text>
+        <Text style={styles.promptAction}>{promptKey ? 'Change prompt' : 'Choose prompt'}</Text>
+      </Pressable>
 
       <Text style={styles.section}>Seal to circles</Text>
       {isLoading ? <ActivityIndicator color={colors.coralDark} /> : null}
