@@ -1,72 +1,21 @@
 import Constants from 'expo-constants';
+import type {
+  CircleDetail,
+  CircleInvitation,
+  CircleSummary,
+  CreateCircleRequest,
+  CurrentUserResponse,
+  EntrySubmissionRequest,
+  EntrySubmissionResponse,
+  GoogleSignInRequest,
+  GoogleSignInResponse,
+  InviteCircleMemberResponse,
+  RefreshSessionResponse,
+} from '@/types/api';
 
 const apiUrl = (Constants.expoConfig?.extra?.apiUrl as string | undefined)
   ?? process.env.EXPO_PUBLIC_API_URL
   ?? 'http://127.0.0.1:5052/api/v1';
-
-export type GoogleSignInRequest = {
-  platform: 'ios' | 'android' | 'web';
-  nonce?: string;
-};
-
-export type GoogleSignInResponse = {
-  userId: string;
-  displayName: string;
-  email: string;
-  accessToken: string;
-  refreshToken: string;
-  accessTokenExpiresAtUtc: string;
-};
-
-export type CurrentUserResponse = {
-  id: string;
-  displayName: string;
-  email: string;
-  avatarUrl: string | null;
-  timeZoneId: string;
-};
-
-export type CircleSummary = {
-  id: string;
-  name: string;
-  emoji: string;
-  status: 'Draft' | 'Sealed' | 'Bloomed' | 'Archived' | string;
-  bloomAtUtc: string;
-  timeZoneId: string;
-  memberCount: number;
-  isCreator: boolean;
-  canLeave: boolean;
-};
-
-export type CircleMember = {
-  userId: string;
-  displayName: string;
-  avatarUrl: string | null;
-  role: string;
-  joinedAtUtc: string;
-  isActive: boolean;
-};
-
-export type CircleDetail = {
-  circle: CircleSummary;
-  members: CircleMember[];
-};
-
-export type CircleInvitation = {
-  id: string;
-  circleId: string;
-  circleName: string;
-  circleEmoji: string;
-  createdAtUtc: string;
-};
-
-export type EntrySubmissionResponse = {
-  diaryEntryId: string;
-  publicationIds: string[];
-  circleIds: string[];
-  authorLocalDate: string;
-  submittedAtUtc: string;
-};
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiUrl}${path}`, {
@@ -91,7 +40,7 @@ export const bloomApi = {
     body: JSON.stringify(request),
     headers: { Authorization: `Bearer ${googleIdToken}` },
   }),
-  refresh: (refreshToken: string) => requestJson<{ accessToken: string; refreshToken: string; accessTokenExpiresAtUtc: string }>('/auth/refresh', {
+  refresh: (refreshToken: string) => requestJson<RefreshSessionResponse>('/auth/refresh', {
     method: 'POST',
     body: JSON.stringify({ refreshToken }),
   }),
@@ -101,7 +50,7 @@ export const bloomApi = {
   listCircles: (accessToken: string) => requestJson<CircleSummary[]>('/circles', {
     headers: { Authorization: `Bearer ${accessToken}` },
   }),
-  createCircle: (accessToken: string, request: { name: string; emoji: string; durationMonths: number; timeZoneId: string }) => requestJson<CircleDetail>('/circles', {
+  createCircle: (accessToken: string, request: CreateCircleRequest) => requestJson<CircleDetail>('/circles', {
     method: 'POST',
     body: JSON.stringify(request),
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -117,7 +66,7 @@ export const bloomApi = {
     body: JSON.stringify({ accept }),
     headers: { Authorization: `Bearer ${accessToken}` },
   }),
-  inviteToCircle: (accessToken: string, circleId: string, email: string) => requestJson<{ invitationId: string; status: string }>(`/circles/${circleId}/invitations`, {
+  inviteToCircle: (accessToken: string, circleId: string, email: string) => requestJson<InviteCircleMemberResponse>(`/circles/${circleId}/invitations`, {
     method: 'POST',
     body: JSON.stringify({ email }),
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -126,15 +75,7 @@ export const bloomApi = {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}` },
   }),
-  submitEntry: (accessToken: string, request: {
-    clientEntryId: string;
-    authorLocalDate: string;
-    authorTimeZoneId: string;
-    text: string;
-    mood?: string;
-    promptKey?: string;
-    circleIds: string[];
-  }) => requestJson<EntrySubmissionResponse>('/entries', {
+  submitEntry: (accessToken: string, request: EntrySubmissionRequest) => requestJson<EntrySubmissionResponse>('/entries', {
     method: 'POST',
     body: JSON.stringify(request),
     headers: { Authorization: `Bearer ${accessToken}` },

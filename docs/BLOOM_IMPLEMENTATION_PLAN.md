@@ -49,6 +49,10 @@ The first sealed-writing slice is now implemented:
 
 Images, persistent local drafts, locked timeline reads, and media encryption remain in the next entries/timeline slices. No migration has been generated yet; the new entry tables will be included in the final migration after the domain phases are complete.
 
+### Frontend structure checkpoint
+
+Expo Router files under `apps/mobile/app` are now route shells only. Screen implementations live under `src/features`, reusable UI lives under `src/components`, API/session contracts live under `src/types`, and all screen/component styles live under `src/styles`. This keeps navigation, feature behavior, contracts, and presentation concerns independently maintainable.
+
 ## 1. Product summary
 
 Bloom is a private, delayed-sharing diary for small groups. A user creates a **circle**, invites friends, chooses an immutable **bloom date**, and writes entries into that circle while it is sealed. When the server reaches the bloom time, eligible members can read the entries together in a shared timeline and add reactions or comments.
@@ -185,20 +189,20 @@ Bloom/
     mobile/
       src/
         api/
+        auth/
         components/
         features/
-          auth/
           home/
           entries/
           circles/
           bloom/
           profile/
-        navigation/
-        storage/
-        theme/
-        utils/
+        styles/
+          screens/
+        types/
+      app/                    # Expo Router route shells only
+        (tabs)/
       assets/
-      app.config.ts
       package.json
   backend/
     Bloom.slnx

@@ -1,0 +1,30 @@
+import { StyleSheet } from 'react-native';
+import { colors, spacing } from '@/styles/tokens';
+
+export const writeStyles = StyleSheet.create({
+  eyebrow: { color: colors.coralDark, fontSize: 11, fontWeight: '800', letterSpacing: 2 },
+  title: { color: colors.ink, fontSize: 28, fontWeight: '700', marginTop: spacing.sm },
+  subtitle: { color: colors.inkSoft, fontSize: 14, lineHeight: 21, marginTop: spacing.sm },
+  error: { backgroundColor: '#FDE7E7', borderRadius: 12, color: colors.coralDark, marginTop: spacing.lg, padding: spacing.md },
+  notice: { backgroundColor: colors.sageLight, borderRadius: 12, color: colors.sageDark, marginTop: spacing.lg, padding: spacing.md },
+  editor: { backgroundColor: colors.card, borderColor: colors.line, borderRadius: 20, borderWidth: 1, color: colors.ink, fontSize: 16, lineHeight: 24, marginTop: spacing.xl, minHeight: 180, padding: spacing.lg },
+  counter: { color: colors.inkSoft, fontSize: 11, marginTop: spacing.xs, textAlign: 'right' },
+  section: { color: colors.inkSoft, fontSize: 12, fontWeight: '800', letterSpacing: 1, marginTop: spacing.xl, textTransform: 'uppercase' },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  chip: { backgroundColor: colors.card, borderColor: colors.line, borderRadius: 18, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  chipSelected: { backgroundColor: colors.lavenderLight, borderColor: colors.lavender },
+  chipText: { color: colors.inkSoft, fontSize: 13, textTransform: 'capitalize' },
+  chipTextSelected: { color: colors.ink, fontWeight: '700' },
+  empty: { color: colors.inkSoft, fontSize: 14, marginTop: spacing.md },
+  circle: { alignItems: 'center', backgroundColor: colors.card, borderColor: colors.line, borderRadius: 16, borderWidth: 1, flexDirection: 'row', marginTop: spacing.sm, padding: spacing.md },
+  circleSelected: { backgroundColor: colors.sageLight, borderColor: colors.sage },
+  circleEmoji: { fontSize: 24, marginRight: spacing.md },
+  circleCopy: { flex: 1 },
+  circleName: { color: colors.ink, fontSize: 15, fontWeight: '700' },
+  circleMeta: { color: colors.inkSoft, fontSize: 12, marginTop: 2 },
+  check: { color: colors.sageDark, fontSize: 24, fontWeight: '700' },
+  submit: { alignItems: 'center', backgroundColor: colors.coral, borderRadius: 18, justifyContent: 'center', marginTop: spacing.xl, minHeight: 54, padding: spacing.lg },
+  submitPressed: { opacity: 0.85 },
+  submitDisabled: { opacity: 0.6 },
+  submitText: { color: colors.card, fontSize: 15, fontWeight: '800' },
+});

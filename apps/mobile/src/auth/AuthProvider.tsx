@@ -3,8 +3,10 @@ import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import Constants from 'expo-constants';
-import { bloomApi, type CurrentUserResponse } from '@/api/client';
-import { clearSession, readSession, writeSession, type StoredSession } from '@/auth/session';
+import { bloomApi } from '@/api/client';
+import { clearSession, readSession, writeSession } from '@/auth/session';
+import type { CurrentUserResponse } from '@/types/api';
+import type { StoredSession } from '@/types/session';
 
 WebBrowser.maybeCompleteAuthSession();
 
