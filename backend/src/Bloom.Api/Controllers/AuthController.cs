@@ -34,8 +34,18 @@ public sealed class AuthController(
             return Unauthorized();
         }
 
+        if (request.Platform is not ("ios" or "android" or "web"))
+        {
+            return BadRequest("Unsupported sign-in platform.");
+        }
+
+        // Native Expo Google sign-in uses authorization code + PKCE and does not
+        // include an ID-token nonce. Web ID-token sign-in does, so retain strict
+        // nonce validation for web and validate it when native clients provide one.
         var tokenNonce = User.FindFirstValue("nonce");
-        if (string.IsNullOrWhiteSpace(request.Nonce) || !string.Equals(tokenNonce, request.Nonce, StringComparison.Ordinal))
+        var nonceMatches = !string.IsNullOrWhiteSpace(request.Nonce)
+            && string.Equals(tokenNonce, request.Nonce, StringComparison.Ordinal);
+        if (request.Platform == "web" ? !nonceMatches : !string.IsNullOrWhiteSpace(request.Nonce) && !nonceMatches)
         {
             return Unauthorized();
         }

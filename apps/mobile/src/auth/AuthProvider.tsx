@@ -46,7 +46,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
-    if (response?.type !== 'success' || !request?.nonce) {
+    if (response?.type !== 'success') {
       if (response?.type === 'error') setError('Google sign-in could not be completed.');
       return;
     }
@@ -63,7 +63,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setError(null);
       try {
         const platform = Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : 'web';
-        const result = await bloomApi.signInWithGoogle(idToken, { platform, nonce: request.nonce! });
+        const result = await bloomApi.signInWithGoogle(idToken, { platform, nonce: request?.nonce });
         const nextSession = { accessToken: result.accessToken, refreshToken: result.refreshToken };
         const nextUser = await bloomApi.me(result.accessToken);
         await writeSession(nextSession);
@@ -71,8 +71,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
           setSession(nextSession);
           setUser(nextUser);
         }
-      } catch {
-        if (!cancelled) setError('Bloom could not start your session. Check the API URL and try again.');
+      } catch (error) {
+        if (!cancelled) {
+          const detail = error instanceof Error ? error.message : 'Unknown sign-in error';
+          setError(`Bloom could not start your session: ${detail}`);
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }

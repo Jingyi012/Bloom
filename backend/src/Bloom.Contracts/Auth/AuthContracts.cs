@@ -1,7 +1,7 @@
 namespace Bloom.Contracts.Auth;
 
 /// <summary>Metadata sent with the native Google sign-in exchange.</summary>
-public sealed record GoogleSignInRequest(string Platform, string Nonce);
+public sealed record GoogleSignInRequest(string Platform, string? Nonce);
 
 /// <summary>Bloom session returned after Google authentication.</summary>
 public sealed record GoogleSignInResponse(

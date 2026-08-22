@@ -6,7 +6,7 @@ const apiUrl = (Constants.expoConfig?.extra?.apiUrl as string | undefined)
 
 export type GoogleSignInRequest = {
   platform: 'ios' | 'android' | 'web';
-  nonce: string;
+  nonce?: string;
 };
 
 export type GoogleSignInResponse = {
