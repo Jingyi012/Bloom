@@ -1,7 +1,9 @@
 using Bloom.Application.Auditing;
 using Bloom.Application.Identity;
 using Bloom.Application.Circles;
+using Bloom.Application.Entries;
 using Bloom.Infrastructure.Circles;
+using Bloom.Infrastructure.Entries;
 using Bloom.Infrastructure.Identity;
 using Bloom.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +30,7 @@ public static class DependencyInjection
         services.AddDbContext<BloomDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IGoogleUserService, EfGoogleUserService>();
         services.AddScoped<ICircleService, EfCircleService>();
+        services.AddScoped<IEntryService, EfEntryService>();
         return services;
     }
 }

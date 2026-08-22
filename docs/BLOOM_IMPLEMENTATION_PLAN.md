@@ -13,7 +13,7 @@ The first vertical slice is now scaffolded in the repository:
 - `backend/Bloom.slnx`: .NET 10 projects for API, Application, Domain, Infrastructure, Contracts, and tests.
 - `Bloom.Api`: Google bearer-token validation boundary, Bloom access/refresh sessions, authenticated `/api/v1/me`, `/health`, local Data Protection key directory, and development-safe console logging.
 - `Bloom.Domain`/`Bloom.Application`: Google user aggregate, common audit fields, and audit stamping services.
-- `Bloom.Infrastructure`: EF Core 10 + Npgsql PostgreSQL persistence for users, circles, memberships, invitations, and refresh sessions.
+- `Bloom.Infrastructure`: EF Core 10 + Npgsql PostgreSQL persistence for users, circles, memberships, invitations, refresh sessions, diary entries, and publications.
 - `Bloom.UnitTests`: five passing audit/identity tests.
 
 EF Core is configured for PostgreSQL, but migrations are intentionally deferred until all domain phases are complete. Each domain has its own Fluent API configuration, and table names use the PascalCase domain entity names. Use the repository `docker-compose.yml` for a local PostgreSQL instance, or override `ConnectionStrings__BloomDb` with an existing PostgreSQL connection string.
@@ -37,6 +37,17 @@ dotnet run --project backend/src/Bloom.Api/Bloom.Api.csproj --launch-profile htt
 ```
 
 The API reads `ConnectionStrings:BloomDb`; `ConnectionStrings__BloomDb` can override it for an existing PostgreSQL installation. `Bloom:ApplyMigrationsOnStartup` remains disabled until the final migration is generated after all phases.
+
+### Phase 3 checkpoint — sealed text entries
+
+The first sealed-writing slice is now implemented:
+
+- `DiaryEntry` and `EntryPublication` are audited domain entities with per-user idempotency and per-circle daily uniqueness constraints.
+- `POST /api/v1/entries` validates the author's local date/time zone, active membership, sealed-circle state, selected-circle count, and duplicate-day rules.
+- A single submission creates independent sealed publications for each selected circle and returns metadata only; entry text is never returned by this endpoint.
+- The mobile Write tab loads sealed circles, supports mood selection, multi-circle selection, and a clear seal confirmation state.
+
+Images, persistent local drafts, locked timeline reads, and media encryption remain in the next entries/timeline slices. No migration has been generated yet; the new entry tables will be included in the final migration after the domain phases are complete.
 
 ## 1. Product summary
 

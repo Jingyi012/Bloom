@@ -76,7 +76,7 @@ public sealed class Circle : AuditableEntity
     public CircleMember AddMember(Guid userId, DateTimeOffset joinedAtUtc)
     {
         if (GetCurrentStatus(joinedAtUtc) == CircleStatus.Bloomed) throw new InvalidOperationException("A circle cannot accept members after it blooms.");
-        if (_members.Any(member => member.UserId == userId && member.LeftAtUtc is null)) throw new InvalidOperationException("The user is already a member.");
+        if (_members.Any(member => member.UserId == userId)) throw new InvalidOperationException("A departed member cannot rejoin this circle.");
 
         var member = CircleMember.Create(Id, userId, CircleMemberRole.Member, joinedAtUtc);
         _members.Add(member);

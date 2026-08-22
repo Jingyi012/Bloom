@@ -2,6 +2,7 @@ using Bloom.Application.Auditing;
 using Bloom.Application.Circles;
 using Bloom.Application.Identity;
 using Bloom.Domain.Circles;
+using Bloom.Domain.Entries;
 using Bloom.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -127,6 +128,15 @@ public sealed class EfCircleService(
         circle.Leave(userId, _timeProvider.GetUtcNow());
         _auditStampWriter.StampModified(circle.FindMember(userId)!, userId);
         _auditStampWriter.StampModified(circle, userId);
+        var publications = await _db.EntryPublications
+            .Where(publication => publication.CircleId == circleId && publication.AuthorUserId == userId && publication.Status == EntryPublicationStatus.Sealed)
+            .ToArrayAsync(cancellationToken)
+            .ConfigureAwait(false);
+        foreach (var publication in publications)
+        {
+            publication.Withdraw();
+            _auditStampWriter.StampModified(publication, userId);
+        }
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return true;
     }

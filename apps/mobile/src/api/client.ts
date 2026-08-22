@@ -60,6 +60,14 @@ export type CircleInvitation = {
   createdAtUtc: string;
 };
 
+export type EntrySubmissionResponse = {
+  diaryEntryId: string;
+  publicationIds: string[];
+  circleIds: string[];
+  authorLocalDate: string;
+  submittedAtUtc: string;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiUrl}${path}`, {
     ...init,
@@ -116,6 +124,19 @@ export const bloomApi = {
   }),
   leaveCircle: (accessToken: string, circleId: string) => requestJson<void>(`/circles/${circleId}/leave`, {
     method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  submitEntry: (accessToken: string, request: {
+    clientEntryId: string;
+    authorLocalDate: string;
+    authorTimeZoneId: string;
+    text: string;
+    mood?: string;
+    promptKey?: string;
+    circleIds: string[];
+  }) => requestJson<EntrySubmissionResponse>('/entries', {
+    method: 'POST',
+    body: JSON.stringify(request),
     headers: { Authorization: `Bearer ${accessToken}` },
   }),
 };
