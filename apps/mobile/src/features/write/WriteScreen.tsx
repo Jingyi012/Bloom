@@ -37,6 +37,17 @@ function getLocalDate() {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
+/**
+ * Expo can return a fresh temporary URI every time the same library asset is
+ * picked. Prefer the stable asset id, then file metadata, and only fall back
+ * to the URI when the picker does not expose either identity.
+ */
+function getPhotoIdentity(asset: ImagePicker.ImagePickerAsset): string {
+  if (asset.assetId) return `asset:${asset.assetId}`;
+  if (asset.fileName && asset.fileSize != null) return `file:${asset.fileName}:${asset.fileSize}`;
+  return `uri:${asset.uri}`;
+}
+
 export default function WriteScreen() {
   const { session, user } = useAuth();
   const { t } = useSettings();
@@ -50,6 +61,7 @@ export default function WriteScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [imageUris, setImageUris] = useState<string[]>([]);
+  const photoIdentityByUri = useRef(new Map<string, string>());
   const [draftClientEntryId, setDraftClientEntryId] = useState<string | null>(null);
   const [isDraftReady, setIsDraftReady] = useState(false);
   const skipNextDraftSave = useRef(false);
@@ -84,7 +96,9 @@ export default function WriteScreen() {
         setMood(draft.mood);
         setPromptKey(draft.promptKey);
         setSelectedCircleIds(draft.selectedCircleIds);
-        setImageUris(draft.imageUris ?? []);
+        const restoredImageUris = draft.imageUris ?? [];
+        photoIdentityByUri.current = new Map(restoredImageUris.map(uri => [uri, `uri:${uri}`]));
+        setImageUris(restoredImageUris);
       if (draft.text || draft.imageUris?.length) setNotice('Your unfinished diary was restored on this device.');
       }
       setIsDraftReady(true);
@@ -144,6 +158,7 @@ export default function WriteScreen() {
       setMood(undefined);
       setPromptKey(undefined);
       setSelectedCircleIds([]);
+      photoIdentityByUri.current.clear();
       setImageUris([]);
       setDraftClientEntryId(null);
       if (currentDraftKey) {
@@ -166,11 +181,25 @@ export default function WriteScreen() {
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: false, allowsMultipleSelection: true, selectionLimit: 10 });
     if (!result.canceled) {
-      setImageUris(current => Array.from(new Set([...current, ...result.assets.map(asset => asset.uri)])).slice(0, 10));
+      setImageUris(current => {
+        const next = [...current];
+        const selectedIdentities = new Set(photoIdentityByUri.current.values());
+        for (const asset of result.assets) {
+          const identity = getPhotoIdentity(asset);
+          if (selectedIdentities.has(identity) || next.length >= 10) continue;
+          next.push(asset.uri);
+          photoIdentityByUri.current.set(asset.uri, identity);
+          selectedIdentities.add(identity);
+        }
+        return next;
+      });
     }
   }, []);
 
-  const removeImage = useCallback((uri: string) => setImageUris(current => current.filter(item => item !== uri)), []);
+  const removeImage = useCallback((uri: string) => {
+    photoIdentityByUri.current.delete(uri);
+    setImageUris(current => current.filter(item => item !== uri));
+  }, []);
 
   return (
     <Screen>
