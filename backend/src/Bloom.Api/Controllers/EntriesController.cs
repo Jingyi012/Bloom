@@ -65,9 +65,9 @@ public sealed class EntriesController(IEntryService entryService) : ControllerBa
         }
     }
 
-    /// <summary>Submits an entry with one optional local image.</summary>
+    /// <summary>Submits an entry with optional local images.</summary>
     [HttpPost("with-media")]
-    [RequestSizeLimit(11 * 1024 * 1024)]
+    [RequestSizeLimit(51 * 1024 * 1024)]
     public async Task<ActionResult<EntrySubmissionResponse>> SubmitWithMediaAsync(
         [FromForm] string clientEntryId,
         [FromForm] DateOnly authorLocalDate,
@@ -76,18 +76,19 @@ public sealed class EntriesController(IEntryService entryService) : ControllerBa
         [FromForm] string? mood,
         [FromForm] string? promptKey,
         [FromForm] string circleIds,
-        IFormFile image,
+        List<IFormFile>? images,
         CancellationToken cancellationToken)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
-        if (image is null) return BadRequest("An image is required.");
+        if (images is null || images.Count == 0) return BadRequest("At least one image is required.");
+        if (images.Count > 10) return BadRequest("You can attach up to 10 images.");
         Guid[] parsedCircleIds;
         try { parsedCircleIds = circleIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Guid.Parse).ToArray(); }
         catch (FormatException) { return BadRequest("Circle ids are invalid."); }
         try
         {
-            await using var stream = image.OpenReadStream();
-            var result = await _entryService.SubmitWithMediaAsync(userId, clientEntryId, authorLocalDate, authorTimeZoneId, text, mood, promptKey, parsedCircleIds, new ImageUpload(stream, image.ContentType), cancellationToken).ConfigureAwait(false);
+            var uploads = images.Select(image => new ImageUpload(image.OpenReadStream(), image.ContentType)).ToArray();
+            var result = await _entryService.SubmitWithMediaAsync(userId, clientEntryId, authorLocalDate, authorTimeZoneId, text, mood, promptKey, parsedCircleIds, uploads, cancellationToken).ConfigureAwait(false);
             return StatusCode(StatusCodes.Status201Created, new EntrySubmissionResponse(result.DiaryEntryId, result.PublicationIds, result.CircleIds, result.AuthorLocalDate, result.SubmittedAtUtc));
         }
         catch (ArgumentException exception) { return BadRequest(exception.Message); }
@@ -212,7 +213,7 @@ public sealed class EntriesController(IEntryService entryService) : ControllerBa
         item.SubmittedAtUtc,
         item.Text,
         item.Mood,
-        item.MediaId,
+        item.MediaIds,
         item.Reactions.Select(reaction => new ReactionResponse(reaction.EmojiCode, reaction.Count, reaction.ReactedByCurrentUser)).ToArray(),
         item.CommentCount);
 }

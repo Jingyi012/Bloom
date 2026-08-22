@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, AppState, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/Screen';
@@ -101,7 +101,6 @@ export default function BloomTimelineScreen() {
           ListEmptyComponent={<Text style={styles.empty}>No diary entries were shared in this circle.</Text>}
           onRefresh={() => void load(true)}
           refreshing={isRefreshing}
-          contentContainerStyle={styles.listContent}
           renderItem={({ item }) => <TimelineCard accessToken={session?.accessToken} entry={item} comments={comments[item.publicationId] ?? []} draft={drafts[item.publicationId] ?? ''} isCommentsOpen={openComments[item.publicationId] === true} onChangeDraft={value => setDrafts(current => ({ ...current, [item.publicationId]: value }))} onAddComment={() => void addComment(item)} onToggleComments={() => void toggleComments(item)} onToggleReaction={() => void toggleReaction(item)} />}
           showsVerticalScrollIndicator={false}
         />
@@ -121,7 +120,9 @@ function TimelineCard({ accessToken, entry, comments, draft, isCommentsOpen, onC
         {entry.mood ? <Text style={styles.mood}>{entry.mood}</Text> : null}
       </View>
       <Text style={styles.body}>{entry.text}</Text>
-      {entry.mediaId && accessToken ? <Image accessibilityLabel="Diary photo" contentFit="cover" source={{ uri: bloomApi.mediaUrl(entry.mediaId), headers: { Authorization: `Bearer ${accessToken}` } }} style={styles.media} /> : null}
+      {entry.mediaIds.length > 0 && accessToken ? <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.mediaGallery}>
+        {entry.mediaIds.map((mediaId, index) => <Image key={mediaId} accessibilityLabel={`Diary photo ${index + 1} of ${entry.mediaIds.length}`} contentFit="cover" source={{ uri: bloomApi.mediaUrl(mediaId), headers: { Authorization: `Bearer ${accessToken}` } }} style={styles.media} />)}
+      </ScrollView> : null}
       <View style={styles.actionRow}>
         <Pressable accessibilityLabel="React with heart" accessibilityRole="button" accessibilityState={{ selected: reaction?.reactedByCurrentUser === true }} onPress={onToggleReaction} style={[styles.reaction, reaction?.reactedByCurrentUser ? styles.reactionActive : null]}><Text style={styles.reactionText}>❤️</Text><Text style={styles.reactionCount}>{reaction?.count ?? 0}</Text></Pressable>
         <Pressable accessibilityRole="button" onPress={onToggleComments}><Text style={styles.commentAction}>{entry.commentCount} {entry.commentCount === 1 ? 'comment' : 'comments'}</Text></Pressable>

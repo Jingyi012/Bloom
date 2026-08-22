@@ -6,6 +6,8 @@ export type WriteDraft = {
   mood?: string;
   promptKey?: string;
   selectedCircleIds: string[];
+  imageUris?: string[];
+  /** Legacy single-photo draft shape, migrated on read. */
   imageUri?: string;
 };
 
@@ -25,7 +27,9 @@ export async function readWriteDraft(key: string): Promise<WriteDraft | null> {
       mood: typeof parsed.mood === 'string' ? parsed.mood : undefined,
       promptKey: typeof parsed.promptKey === 'string' ? parsed.promptKey : undefined,
       selectedCircleIds: parsed.selectedCircleIds.filter((id): id is string => typeof id === 'string'),
-      imageUri: typeof parsed.imageUri === 'string' ? parsed.imageUri : undefined,
+      imageUris: Array.isArray(parsed.imageUris)
+        ? parsed.imageUris.filter((uri): uri is string => typeof uri === 'string').slice(0, 10)
+        : typeof parsed.imageUri === 'string' ? [parsed.imageUri] : undefined,
     };
   } catch {
     return null;

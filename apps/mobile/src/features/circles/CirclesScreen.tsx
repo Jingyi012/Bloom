@@ -154,7 +154,6 @@ export default function CirclesScreen() {
           keyExtractor={(item) => item.id}
           ListEmptyComponent={<Text style={styles.empty}>No circles yet. Plant one for your favorite people.</Text>}
           ListHeaderComponent={header}
-          contentContainerStyle={styles.listContent}
           onRefresh={() => void load(true)}
           refreshing={isRefreshing}
           renderItem={({ item }) => <CircleCard circle={item} onPress={() => router.push({ pathname: '/circle-detail/[circleId]', params: { circleId: item.id } })} />}

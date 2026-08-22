@@ -29,7 +29,7 @@ public sealed record TimelineEntryResponse(
     DateTimeOffset SubmittedAtUtc,
     string Text,
     string? Mood,
-    Guid? MediaId,
+    IReadOnlyList<Guid> MediaIds,
     IReadOnlyList<ReactionResponse> Reactions,
     int CommentCount);
 

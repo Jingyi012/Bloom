@@ -108,7 +108,7 @@ export const bloomApi = {
     body: JSON.stringify(request),
     headers: { Authorization: `Bearer ${accessToken}` },
   }),
-  submitEntryWithMedia: (accessToken: string, request: EntrySubmissionRequest, imageUri: string) => {
+  submitEntryWithMedia: (accessToken: string, request: EntrySubmissionRequest, imageUris: string[]) => {
     const formData = new FormData();
     formData.append('clientEntryId', request.clientEntryId);
     formData.append('authorLocalDate', request.authorLocalDate);
@@ -117,7 +117,11 @@ export const bloomApi = {
     if (request.mood) formData.append('mood', request.mood);
     if (request.promptKey) formData.append('promptKey', request.promptKey);
     formData.append('circleIds', request.circleIds.join(','));
-    formData.append('image', { uri: imageUri, name: 'bloom-entry.jpg', type: 'image/jpeg' } as unknown as Blob);
+    imageUris.forEach((imageUri, index) => {
+      const extension = imageUri.split('?')[0]?.split('.').pop()?.toLowerCase();
+      const type = extension === 'png' ? 'image/png' : extension === 'heic' || extension === 'heif' ? 'image/heic' : 'image/jpeg';
+      formData.append('images', { uri: imageUri, name: `bloom-entry-${index + 1}.${extension || 'jpg'}`, type } as unknown as Blob);
+    });
     return requestMultipart<EntrySubmissionResponse>('/entries/with-media', formData, accessToken);
   },
   getTimeline: (accessToken: string, circleId: string, cursor?: string) => requestJson<TimelineResponse>(`/circles/${circleId}/timeline${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, {

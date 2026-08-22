@@ -3,7 +3,7 @@ import { colors, shadows, spacing, typography } from '@/styles/tokens';
 
 export const screenStyles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
-  content: { flexGrow: 1, padding: spacing.xl, paddingBottom: spacing.xxl + 24, backgroundColor: colors.background },
+  content: { flexGrow: 1, padding: spacing.xl, backgroundColor: colors.background },
 });
 
 export const primaryButtonStyles = StyleSheet.create({

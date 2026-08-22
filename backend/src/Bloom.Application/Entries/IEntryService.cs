@@ -18,7 +18,7 @@ public interface IEntryService
         IReadOnlyCollection<Guid> circleIds,
         CancellationToken cancellationToken);
 
-    /// <summary>Submits an entry and stores one encrypted local image for each publication.</summary>
+    /// <summary>Submits an entry and stores encrypted local images for each publication.</summary>
     Task<EntrySubmissionResult> SubmitWithMediaAsync(
         Guid authorUserId,
         string clientEntryId,
@@ -28,7 +28,7 @@ public interface IEntryService
         string? mood,
         string? promptKey,
         IReadOnlyCollection<Guid> circleIds,
-        ImageUpload image,
+        IReadOnlyCollection<ImageUpload> images,
         CancellationToken cancellationToken);
 
     /// <summary>Gets a page of entries visible in a bloomed circle.</summary>
@@ -72,7 +72,7 @@ public sealed record TimelineEntry(
     DateTimeOffset SubmittedAtUtc,
     string Text,
     string? Mood,
-    Guid? MediaId,
+    IReadOnlyList<Guid> MediaIds,
     IReadOnlyList<ReactionSummary> Reactions,
     int CommentCount);
 

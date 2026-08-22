@@ -117,7 +117,7 @@ export type TimelineEntry = {
   submittedAtUtc: string;
   text: string;
   mood: string | null;
-  mediaId: string | null;
+  mediaIds: string[];
   reactions: Reaction[];
   commentCount: number;
 };

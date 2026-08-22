@@ -40,5 +40,4 @@ export const circlesStyles = StyleSheet.create({
   status: { color: colors.coralDark, fontSize: 9, fontWeight: '800', letterSpacing: 1 },
   statusBloomed: { color: colors.sageDark },
   loading: { alignItems: 'center', flex: 1, justifyContent: 'center' },
-  listContent: { paddingBottom: 150 },
 });

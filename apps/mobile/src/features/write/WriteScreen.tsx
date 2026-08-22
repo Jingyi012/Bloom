@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { Screen } from '@/components/Screen';
@@ -49,7 +49,7 @@ export default function WriteScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageUris, setImageUris] = useState<string[]>([]);
   const [draftClientEntryId, setDraftClientEntryId] = useState<string | null>(null);
   const [isDraftReady, setIsDraftReady] = useState(false);
   const skipNextDraftSave = useRef(false);
@@ -84,8 +84,8 @@ export default function WriteScreen() {
         setMood(draft.mood);
         setPromptKey(draft.promptKey);
         setSelectedCircleIds(draft.selectedCircleIds);
-        setImageUri(draft.imageUri ?? null);
-      if (draft.text || draft.imageUri) setNotice('Your unfinished diary was restored on this device.');
+        setImageUris(draft.imageUris ?? []);
+      if (draft.text || draft.imageUris?.length) setNotice('Your unfinished diary was restored on this device.');
       }
       setIsDraftReady(true);
     });
@@ -101,10 +101,10 @@ export default function WriteScreen() {
     const clientEntryId = draftClientEntryId ?? createClientEntryId();
     if (!draftClientEntryId) setDraftClientEntryId(clientEntryId);
     const handle = setTimeout(() => {
-      void saveWriteDraft(currentDraftKey, { clientEntryId, text, mood, promptKey, selectedCircleIds, imageUri: imageUri ?? undefined });
+      void saveWriteDraft(currentDraftKey, { clientEntryId, text, mood, promptKey, selectedCircleIds, imageUris: imageUris.length > 0 ? imageUris : undefined });
     }, 350);
     return () => clearTimeout(handle);
-  }, [currentDraftKey, draftClientEntryId, imageUri, isDraftReady, mood, promptKey, selectedCircleIds, text]);
+  }, [currentDraftKey, draftClientEntryId, imageUris, isDraftReady, mood, promptKey, selectedCircleIds, text]);
 
   const selectedCount = useMemo(() => selectedCircleIds.length, [selectedCircleIds.length]);
 
@@ -138,13 +138,13 @@ export default function WriteScreen() {
         promptKey,
         circleIds: selectedCircleIds,
       };
-      if (imageUri) await bloomApi.submitEntryWithMedia(session.accessToken, submission, imageUri);
+      if (imageUris.length > 0) await bloomApi.submitEntryWithMedia(session.accessToken, submission, imageUris);
       else await bloomApi.submitEntry(session.accessToken, submission);
       setText('');
       setMood(undefined);
       setPromptKey(undefined);
       setSelectedCircleIds([]);
-      setImageUri(null);
+      setImageUris([]);
       setDraftClientEntryId(null);
       if (currentDraftKey) {
         skipNextDraftSave.current = true;
@@ -156,7 +156,7 @@ export default function WriteScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentDraftKey, draftClientEntryId, imageUri, localDate, mood, promptKey, selectedCircleIds, session?.accessToken, text]);
+  }, [currentDraftKey, draftClientEntryId, imageUris, localDate, mood, promptKey, selectedCircleIds, session?.accessToken, text]);
 
   const pickImage = useCallback(async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -164,9 +164,11 @@ export default function WriteScreen() {
       setError('Allow photo access to attach an image.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: true, allowsMultipleSelection: false, selectionLimit: 1, aspect: [4, 3] });
-    if (!result.canceled) setImageUri(result.assets[0]?.uri ?? null);
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: false, allowsMultipleSelection: true, selectionLimit: 10 });
+    if (!result.canceled) setImageUris(current => [...current, ...result.assets.map(asset => asset.uri)].slice(0, 10));
   }, []);
+
+  const removeImage = useCallback((uri: string) => setImageUris(current => current.filter(item => item !== uri)), []);
 
   return (
     <Screen>
@@ -191,9 +193,14 @@ export default function WriteScreen() {
       <Text style={styles.counter}>{text.length}/5000</Text>
 
       <Pressable accessibilityRole="button" accessibilityLabel="Attach one photo" onPress={() => void pickImage()} style={styles.photoButton}>
-        <Text style={styles.photoButtonText}>{imageUri ? t('replacePhoto') : t('attachPhoto')}</Text>
+        <Text style={styles.photoButtonText}>{imageUris.length > 0 ? `Add more photos (${imageUris.length}/10)` : t('attachPhoto')}</Text>
       </Pressable>
-      {imageUri ? <Image accessibilityLabel="Selected diary photo" contentFit="cover" source={imageUri} style={styles.photoPreview} /> : null}
+      {imageUris.length > 0 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoGallery}>
+        {imageUris.map((uri, index) => <View key={`${uri}-${index}`} style={styles.photoTile}>
+          <Image accessibilityLabel={`Selected diary photo ${index + 1}`} contentFit="cover" source={uri} style={styles.photoPreview} />
+          <Pressable accessibilityLabel={`Remove photo ${index + 1}`} onPress={() => removeImage(uri)} style={styles.removePhoto}><Text style={styles.removePhotoText}>×</Text></Pressable>
+        </View>)}
+      </ScrollView> : null}
 
       <Text style={styles.section}>{t('mood')}</Text>
       <View style={styles.moodRow}>

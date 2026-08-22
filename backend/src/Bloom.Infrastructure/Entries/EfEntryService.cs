@@ -132,36 +132,44 @@ public sealed class EfEntryService(
         string? mood,
         string? promptKey,
         IReadOnlyCollection<Guid> circleIds,
-        ImageUpload image,
+        IReadOnlyCollection<ImageUpload> images,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(image);
+        ArgumentNullException.ThrowIfNull(images);
+        if (images.Count == 0) throw new ArgumentException("At least one image is required.", nameof(images));
+        if (images.Count > 10) throw new ArgumentException("You can attach up to 10 images.", nameof(images));
         var result = await SubmitAsync(authorUserId, clientEntryId, authorLocalDate, authorTimeZoneId, text, mood, promptKey, circleIds, cancellationToken).ConfigureAwait(false);
         if (await _db.EntryMedia.AnyAsync(media => result.PublicationIds.Contains(media.EntryPublicationId) && media.DeletedAtUtc == null, cancellationToken).ConfigureAwait(false))
             return result;
 
-        StoredImage? stored = null;
+        var storedImages = new List<StoredImage>();
         try
         {
-            await using (image.Content.ConfigureAwait(false))
+            var sortOrder = 0;
+            foreach (var image in images)
             {
-                stored = await _imageStorage.SaveAsync(authorUserId, image.Content, image.ContentType, cancellationToken).ConfigureAwait(false);
-            }
-            var asset = MediaAsset.Create(authorUserId, stored.RelativePath, stored.ContentType, stored.SizeBytes, stored.Sha256);
-            _auditStampWriter.StampCreated(asset, authorUserId);
-            _db.MediaAssets.Add(asset);
-            foreach (var publicationId in result.PublicationIds)
-            {
-                var link = EntryMedia.Create(publicationId, asset.Id);
-                _auditStampWriter.StampCreated(link, authorUserId);
-                _db.EntryMedia.Add(link);
+                await using (image.Content.ConfigureAwait(false))
+                {
+                    var stored = await _imageStorage.SaveAsync(authorUserId, image.Content, image.ContentType, cancellationToken).ConfigureAwait(false);
+                    storedImages.Add(stored);
+                    var asset = MediaAsset.Create(authorUserId, stored.RelativePath, stored.ContentType, stored.SizeBytes, stored.Sha256);
+                    _auditStampWriter.StampCreated(asset, authorUserId);
+                    _db.MediaAssets.Add(asset);
+                    foreach (var publicationId in result.PublicationIds)
+                    {
+                        var link = EntryMedia.Create(publicationId, asset.Id, sortOrder);
+                        _auditStampWriter.StampCreated(link, authorUserId);
+                        _db.EntryMedia.Add(link);
+                    }
+                }
+                sortOrder++;
             }
             await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             return result;
         }
         catch
         {
-            if (stored is not null) await _imageStorage.DeleteAsync(stored.RelativePath, cancellationToken).ConfigureAwait(false);
+            foreach (var stored in storedImages) await _imageStorage.DeleteAsync(stored.RelativePath, cancellationToken).ConfigureAwait(false);
             throw;
         }
     }
@@ -298,8 +306,9 @@ public sealed class EfEntryService(
             .ToArrayAsync(cancellationToken).ConfigureAwait(false);
         var commentCounts = await _db.Comments.AsNoTracking().Where(comment => publicationIds.Contains(comment.EntryPublicationId) && comment.DeletedAtUtc == null && !comment.IsHidden)
             .GroupBy(comment => comment.EntryPublicationId).Select(group => new { PublicationId = group.Key, Count = group.Count() }).ToDictionaryAsync(item => item.PublicationId, item => item.Count, cancellationToken).ConfigureAwait(false);
-        var mediaIds = await _db.EntryMedia.AsNoTracking().Where(media => publicationIds.Contains(media.EntryPublicationId) && media.DeletedAtUtc == null)
-            .OrderBy(media => media.SortOrder).GroupBy(media => media.EntryPublicationId).Select(group => new { PublicationId = group.Key, MediaId = group.First().MediaAssetId }).ToDictionaryAsync(item => item.PublicationId, item => item.MediaId, cancellationToken).ConfigureAwait(false);
+        var mediaRows = await _db.EntryMedia.AsNoTracking().Where(media => publicationIds.Contains(media.EntryPublicationId) && media.DeletedAtUtc == null)
+            .OrderBy(media => media.SortOrder).Select(media => new { media.EntryPublicationId, media.MediaAssetId, media.SortOrder }).ToArrayAsync(cancellationToken).ConfigureAwait(false);
+        var mediaIds = mediaRows.GroupBy(media => media.EntryPublicationId).ToDictionary(group => group.Key, group => group.OrderBy(media => media.SortOrder).Select(media => media.MediaAssetId).ToArray());
         return rows.Select(row => new TimelineEntry(
             row.publication.Id,
             row.diaryEntry.Id,
@@ -310,7 +319,7 @@ public sealed class EfEntryService(
             row.publication.SubmittedAtUtc,
             _entryProtector.Unprotect(row.diaryEntry.Text),
             row.diaryEntry.Mood,
-            mediaIds.ContainsKey((Guid)row.publication.Id) ? (Guid?)mediaIds[(Guid)row.publication.Id] : null,
+            mediaIds.TryGetValue((Guid)row.publication.Id, out var publicationMediaIds) ? publicationMediaIds : Array.Empty<Guid>(),
             reactions.Where(reaction => reaction.EntryPublicationId == row.publication.Id).Select(reaction => new ReactionSummary(reaction.EmojiCode, reaction.Count, reaction.Reacted)).ToArray(),
             (commentCounts.ContainsKey((Guid)row.publication.Id) ? commentCounts[(Guid)row.publication.Id] : 0))).ToArray();
     }
