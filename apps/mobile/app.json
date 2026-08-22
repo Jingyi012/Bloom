@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Bloom",
+    "slug": "bloom",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "com.bestfriends.bloom",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bestfriends.bloom"
+    },
+    "android": {
+      "package": "com.bestfriends.bloom"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "12970537-412f-42f9-b8dd-2d464566160f"
+      }
+    }
+  }
+}

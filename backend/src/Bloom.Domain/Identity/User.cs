@@ -1,0 +1,75 @@
+using Bloom.Domain.Common;
+
+namespace Bloom.Domain.Identity;
+
+/// <summary>
+/// Represents a Bloom user provisioned from a verified Google identity.
+/// </summary>
+public sealed class User : AuditableEntity
+{
+    private User()
+    {
+    }
+
+    /// <summary>Gets Google's immutable subject identifier.</summary>
+    public string GoogleSubject { get; private set; } = string.Empty;
+
+    /// <summary>Gets the verified email returned by Google.</summary>
+    public string Email { get; private set; } = string.Empty;
+
+    /// <summary>Gets whether the provider verified the email claim.</summary>
+    public bool EmailVerified { get; private set; }
+
+    /// <summary>Gets the display name shown in Bloom.</summary>
+    public string DisplayName { get; private set; } = string.Empty;
+
+    /// <summary>Gets the optional Google avatar URL.</summary>
+    public string? GoogleAvatarUrl { get; private set; }
+
+    /// <summary>Gets the user's IANA time-zone identifier.</summary>
+    public string TimeZoneId { get; private set; } = "UTC";
+
+    /// <summary>Creates a local user from a validated Google identity.</summary>
+    /// <param name="googleSubject">The immutable Google subject claim.</param>
+    /// <param name="email">The verified email claim.</param>
+    /// <param name="emailVerified">Whether Google verified the email.</param>
+    /// <param name="displayName">The provider display name.</param>
+    /// <param name="avatarUrl">The optional provider avatar URL.</param>
+    /// <param name="timeZoneId">The user's initial IANA time-zone identifier.</param>
+    /// <returns>A new user aggregate.</returns>
+    public static User CreateFromGoogle(
+        string googleSubject,
+        string email,
+        bool emailVerified,
+        string displayName,
+        string? avatarUrl,
+        string timeZoneId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(googleSubject);
+        ArgumentException.ThrowIfNullOrWhiteSpace(email);
+        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(timeZoneId);
+
+        return new User
+        {
+            GoogleSubject = googleSubject,
+            Email = email,
+            EmailVerified = emailVerified,
+            DisplayName = displayName,
+            GoogleAvatarUrl = avatarUrl,
+            TimeZoneId = timeZoneId,
+        };
+    }
+
+    /// <summary>Updates profile fields that are safe for the user to edit.</summary>
+    /// <param name="displayName">The new display name.</param>
+    /// <param name="timeZoneId">The new IANA time-zone identifier.</param>
+    public void UpdateProfile(string displayName, string timeZoneId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(timeZoneId);
+
+        DisplayName = displayName.Trim();
+        TimeZoneId = timeZoneId.Trim();
+    }
+}
