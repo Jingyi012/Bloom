@@ -7,6 +7,7 @@ import { bloomApi } from '@/api/client';
 import type { CircleDetail } from '@/types/api';
 import { colors } from '@/styles/tokens';
 import { circleDetailStyles as styles } from '@/styles/screens/circle-detail.styles';
+import { InlineAlert } from '@/components/InlineAlert';
 
 export default function CircleDetailScreen() {
   const { circleId } = useLocalSearchParams<{ circleId: string }>();
@@ -55,7 +56,7 @@ export default function CircleDetailScreen() {
   }, [circleId, router, session?.accessToken]);
 
   if (isLoading) return <Screen scroll={false}><View style={styles.loading}><ActivityIndicator color={colors.coralDark} /></View></Screen>;
-  if (!detail) return <Screen><Pressable accessibilityRole="button" onPress={() => router.back()}><Text style={styles.back}>Back</Text></Pressable><Text style={styles.error}>{error ?? 'Circle not found.'}</Text></Screen>;
+  if (!detail) return <Screen><Pressable accessibilityRole="button" onPress={() => router.back()}><Text style={styles.back}>Back</Text></Pressable><InlineAlert message={error ?? 'Circle not found.'} onDismiss={() => setError(null)} /></Screen>;
 
   const { circle, members } = detail;
   return <Screen>
@@ -68,7 +69,7 @@ export default function CircleDetailScreen() {
       <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} /></View>
       <Text style={styles.progressLabel}>{circle.status === 'Bloomed' ? 'Fully bloomed' : `${Math.round(progress * 100)}% through this season`}</Text>
     </View>
-    {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+    {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
     {notice ? <Text style={styles.progressLabel}>{notice}</Text> : null}
     <Text style={styles.section}>Members · {members.length}</Text>
     {members.map(member => <View key={member.userId} style={styles.member}><View style={styles.avatar}><Text style={styles.avatarText}>{member.displayName.charAt(0).toUpperCase()}</Text></View><View style={styles.memberCopy}><Text style={styles.memberName}>{member.displayName}</Text><Text style={styles.memberMeta}>{member.role} · joined {formatDate(member.joinedAtUtc)}</Text></View></View>)}

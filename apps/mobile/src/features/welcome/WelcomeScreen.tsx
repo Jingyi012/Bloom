@@ -5,9 +5,10 @@ import { GoogleSignInButton } from '@/components/GoogleSignInButton';
 import { Screen } from '@/components/Screen';
 import { colors } from '@/styles/tokens';
 import { welcomeStyles as styles } from '@/styles/screens/welcome.styles';
+import { InlineAlert } from '@/components/InlineAlert';
 
 export default function WelcomeScreen() {
-  const { error, isLoading, session, signInWithGoogle } = useAuth();
+  const { clearError, error, isLoading, session, signInWithGoogle } = useAuth();
 
   if (session) return <Redirect href="/(tabs)" />;
   if (isLoading) return <Screen scroll={false}><View style={styles.loading}><ActivityIndicator color={colors.coralDark} /><Text style={styles.note}>Opening Bloom…</Text></View></Screen>;
@@ -24,7 +25,7 @@ export default function WelcomeScreen() {
         </Text>
         <View style={styles.spacer} />
         <GoogleSignInButton disabled={isLoading} onPress={() => void signInWithGoogle()} />
-        {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+        {error ? <InlineAlert message={error} onDismiss={clearError} /> : null}
         <Text style={styles.note}>Your Google account is used only to sign in to Bloom.</Text>
       </View>
     </Screen>

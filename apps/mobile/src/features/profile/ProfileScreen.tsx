@@ -18,6 +18,7 @@ import { colors } from "@/styles/tokens";
 import { profileStyles as styles } from "@/styles/screens/profile.styles";
 import { useSettings } from "@/settings/SettingsProvider";
 import { getDeviceTimeZone } from "@/utils/device";
+import { InlineAlert } from "@/components/InlineAlert";
 
 export default function ProfileScreen() {
   const { session, user, signOut } = useAuth();
@@ -127,11 +128,7 @@ export default function ProfileScreen() {
         </Pressable>
       </View>
       <Text style={styles.body}>{t("profileBody")}</Text>
-      {error ? (
-        <Text accessibilityRole="alert" style={styles.error}>
-          {error}
-        </Text>
-      ) : null}
+      {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       {isLoading ? (
         <ActivityIndicator color={colors.coralDark} />
@@ -183,13 +180,16 @@ export default function ProfileScreen() {
           <Text style={styles.chevron}>›</Text>
         </Pressable>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        onPress={deleteAccount}
-        style={styles.danger}
-      >
-        <Text style={styles.dangerText}>{t("deleteAccount")}</Text>
+      <Pressable accessibilityRole="button" onPress={() => void signOut()} style={styles.signOut}>
+        <Text style={styles.signOutText}>{t("signOut")}</Text>
       </Pressable>
+      <View style={styles.dangerCard}>
+        <Text style={styles.dangerTitle}>{t("dangerZone")}</Text>
+        <Text style={styles.dangerBody}>{t("dangerBody")}</Text>
+        <Pressable accessibilityRole="button" onPress={deleteAccount} style={styles.danger}>
+          <Text style={styles.dangerText}>{t("deleteAccount")}</Text>
+        </Pressable>
+      </View>
       <Modal
         animationType="slide"
         onRequestClose={() => setSheet(null)}

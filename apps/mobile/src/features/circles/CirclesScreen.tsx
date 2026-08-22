@@ -9,6 +9,7 @@ import type { CircleInvitation, CircleSummary } from '@/types/api';
 import { colors } from '@/styles/tokens';
 import { circlesStyles as styles } from '@/styles/screens/circles.styles';
 import { useSettings } from '@/settings/SettingsProvider';
+import { InlineAlert } from '@/components/InlineAlert';
 import { getDeviceTimeZone } from '@/utils/device';
 
 const DURATION_OPTIONS = [1, 3, 6, 12] as const;
@@ -140,7 +141,7 @@ export default function CirclesScreen() {
         </View>
       ) : null}
 
-      {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+      {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
       <Text style={styles.sectionTitle}>{t('activeCirclesTitle')}</Text>
     </View>
   ), [create, durationMonths, error, invitations, isCreating, name, respond, showCreateForm, t]);

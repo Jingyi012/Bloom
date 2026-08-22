@@ -9,6 +9,7 @@ import { bloomApi } from '@/api/client';
 import type { Comment as ApiComment, TimelineEntry } from '@/types/api';
 import { colors } from '@/styles/tokens';
 import { bloomStyles as styles } from '@/styles/screens/bloom.styles';
+import { InlineAlert } from '@/components/InlineAlert';
 
 const PRIMARY_REACTION = '❤️';
 
@@ -92,7 +93,7 @@ export default function BloomTimelineScreen() {
         <Text style={styles.title}>Together, then.</Text>
         <Text style={styles.subtitle}>Everything written in this circle is open now.</Text>
       </View>
-      {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+      {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
       {isLoading ? <View style={styles.loading}><ActivityIndicator color={colors.coralDark} /></View> : (
         <FlashList
           data={entries}

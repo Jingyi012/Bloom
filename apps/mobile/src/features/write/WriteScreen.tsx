@@ -11,6 +11,7 @@ import { colors } from '@/styles/tokens';
 import { writeStyles as styles } from '@/styles/screens/write.styles';
 import { clearWriteDraft, draftKey, readWriteDraft, saveWriteDraft } from '@/features/write/draftStorage';
 import { useSettings } from '@/settings/SettingsProvider';
+import { InlineAlert } from '@/components/InlineAlert';
 import { getDeviceTimeZone } from '@/utils/device';
 
 const MOODS = [
@@ -173,7 +174,7 @@ export default function WriteScreen() {
       <Text style={styles.title}>{t('writeHonestly')}</Text>
       <Text style={styles.subtitle}>{t('diaryPrivate')}</Text>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
       <TextInput

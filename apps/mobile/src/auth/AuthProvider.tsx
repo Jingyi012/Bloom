@@ -16,6 +16,7 @@ type AuthContextValue = {
   session: StoredSession | null;
   user: CurrentUserResponse | null;
   error: string | null;
+  clearError: () => void;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -101,8 +102,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setSession(null);
     setUser(null);
   }, []);
+  const clearError = useCallback(() => setError(null), []);
 
-  const value = useMemo(() => ({ isLoading, session, user, error, signInWithGoogle, signOut }), [error, isLoading, session, signInWithGoogle, signOut, user]);
+  const value = useMemo(() => ({ isLoading, session, user, error, clearError, signInWithGoogle, signOut }), [clearError, error, isLoading, session, signInWithGoogle, signOut, user]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
