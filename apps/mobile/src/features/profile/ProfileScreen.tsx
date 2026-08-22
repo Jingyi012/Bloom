@@ -34,13 +34,16 @@ export default function ProfileScreen() {
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [stats, setStats] = useState<UserStatsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<"profile" | "language" | "reminder" | null>(null);
 
-  const loadStats = useCallback(async () => {
+  const loadStats = useCallback(async (refresh = false) => {
     if (!session?.accessToken) return;
+    refresh ? setIsRefreshing(true) : setIsLoading(true);
+    setError(null);
     try {
       setStats(await bloomApi.stats(session.accessToken));
     } catch (loadError) {
@@ -51,6 +54,7 @@ export default function ProfileScreen() {
       );
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   }, [session?.accessToken]);
 
@@ -108,7 +112,7 @@ export default function ProfileScreen() {
   }, [language, session?.accessToken, signOut, t]);
 
   return (
-    <Screen>
+    <Screen onRefresh={() => void loadStats(true)} refreshing={isRefreshing}>
       <View style={styles.profileHead}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
@@ -129,7 +133,7 @@ export default function ProfileScreen() {
       </View>
       <Text style={styles.body}>{t("profileBody")}</Text>
       {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
-      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+      {notice ? <InlineAlert message={notice} onDismiss={() => setNotice(null)} variant="success" /> : null}
       {isLoading ? (
         <ActivityIndicator color={colors.coralDark} />
       ) : (

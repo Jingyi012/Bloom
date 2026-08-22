@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from "react";
-import { ScrollView, View } from "react-native";
+import { RefreshControl, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { screenStyles } from "@/styles/components.styles";
@@ -7,7 +7,9 @@ import { screenStyles } from "@/styles/components.styles";
 export function Screen({
   children,
   scroll = true,
-}: PropsWithChildren<{ scroll?: boolean }>) {
+  refreshing = false,
+  onRefresh,
+}: PropsWithChildren<{ scroll?: boolean; refreshing?: boolean; onRefresh?: () => void }>) {
   const insets = useSafeAreaInsets();
   const content = (
     <View
@@ -23,7 +25,10 @@ export function Screen({
       edges={["top", "left", "right"]}
     >
       {scroll ? (
-        <ScrollView contentInsetAdjustmentBehavior="automatic">
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          refreshControl={onRefresh ? <RefreshControl onRefresh={onRefresh} refreshing={refreshing} /> : undefined}
+        >
           {content}
         </ScrollView>
       ) : (

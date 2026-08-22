@@ -23,10 +23,12 @@ export default function HomeScreen() {
   const [circles, setCircles] = useState<CircleSummary[]>([]);
   const [stats, setStats] = useState<UserStatsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (refresh = false) => {
     if (!session?.accessToken) return;
+    refresh ? setIsRefreshing(true) : setIsLoading(true);
     setError(null);
     try {
       const [nextCircles, nextStats] = await Promise.all([
@@ -43,6 +45,7 @@ export default function HomeScreen() {
       );
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   }, [session?.accessToken]);
 
@@ -51,7 +54,7 @@ export default function HomeScreen() {
   }, [load]);
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") void load();
+      if (state === "active") void load(true);
     });
     return () => subscription.remove();
   }, [load]);
@@ -65,7 +68,7 @@ export default function HomeScreen() {
   const firstName = user?.displayName.split(" ")[0] || "friend";
 
   return (
-    <Screen>
+    <Screen onRefresh={() => void load(true)} refreshing={isRefreshing}>
       <Text style={styles.eyebrow}>{greeting(t)}</Text>
       <Text style={styles.title}>
         {t("hi")} {firstName} <Text style={styles.titleDecor}>🌙</Text>
