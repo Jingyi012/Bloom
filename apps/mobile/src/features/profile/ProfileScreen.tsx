@@ -50,13 +50,13 @@ export default function ProfileScreen() {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : "Could not load your stats.",
+          : t("statsLoadFailed"),
       );
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [session?.accessToken]);
+  }, [session?.accessToken, t]);
 
   useEffect(() => {
     void loadStats();
@@ -82,7 +82,7 @@ export default function ProfileScreen() {
       setError(
         saveError instanceof Error
           ? saveError.message
-          : "Could not save your profile.",
+          : t("profileSaveFailed"),
       );
     } finally {
       setIsSaving(false);
@@ -93,11 +93,9 @@ export default function ProfileScreen() {
     if (!session?.accessToken) return;
     Alert.alert(
       t("deleteAccount"),
-      language === "zh"
-        ? "你的帐号将被停用，现有登录会话也会失效。"
-        : "Your account will be deactivated and your active sessions revoked.",
+      t("dangerBody"),
       [
-        { text: language === "zh" ? "取消" : "Cancel", style: "cancel" },
+        { text: t("deleteConfirmCancel"), style: "cancel" },
         {
           text: t("deleteAccount"),
           style: "destructive",

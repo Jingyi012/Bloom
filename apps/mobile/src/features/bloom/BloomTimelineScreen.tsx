@@ -10,12 +10,14 @@ import type { Comment as ApiComment, TimelineEntry } from '@/types/api';
 import { colors } from '@/styles/tokens';
 import { bloomStyles as styles } from '@/styles/screens/bloom.styles';
 import { InlineAlert } from '@/components/InlineAlert';
+import { useSettings } from '@/settings/SettingsProvider';
 
 const PRIMARY_REACTION = '❤️';
 
 export default function BloomTimelineScreen() {
   const { circleId } = useLocalSearchParams<{ circleId: string }>();
   const { session } = useAuth();
+  const { t } = useSettings();
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   const [comments, setComments] = useState<Record<string, ApiComment[]>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -32,12 +34,12 @@ export default function BloomTimelineScreen() {
       const page = await bloomApi.getTimeline(session.accessToken, circleId);
       setEntries(page.items);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not open this timeline.');
+      setError(loadError instanceof Error ? loadError.message : t('timelineLoadFailed'));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [circleId, session?.accessToken]);
+  }, [circleId, session?.accessToken, t]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
@@ -56,9 +58,9 @@ export default function BloomTimelineScreen() {
         ? { ...item, reactions: [...item.reactions.filter(reaction => reaction.emojiCode !== PRIMARY_REACTION), result] }
         : item));
     } catch (reactionError) {
-      setError(reactionError instanceof Error ? reactionError.message : 'Could not update your reaction.');
+      setError(reactionError instanceof Error ? reactionError.message : t('reactionUpdateFailed'));
     }
-  }, [session?.accessToken]);
+  }, [session?.accessToken, t]);
 
   const toggleComments = useCallback(async (entry: TimelineEntry) => {
     const nextOpen = !openComments[entry.publicationId];
@@ -69,9 +71,9 @@ export default function BloomTimelineScreen() {
       const page = await bloomApi.getComments(session.accessToken, entry.publicationId);
       setComments(current => ({ ...current, [entry.publicationId]: page.items }));
     } catch (commentError) {
-      setError(commentError instanceof Error ? commentError.message : 'Could not load comments.');
+      setError(commentError instanceof Error ? commentError.message : t('commentsLoadFailed'));
     }
-  }, [comments, openComments, session?.accessToken]);
+  }, [comments, openComments, session?.accessToken, t]);
 
   const addComment = useCallback(async (entry: TimelineEntry) => {
     const body = drafts[entry.publicationId]?.trim();
@@ -82,23 +84,23 @@ export default function BloomTimelineScreen() {
       setDrafts(current => ({ ...current, [entry.publicationId]: '' }));
       setEntries(items => items.map(item => item.publicationId === entry.publicationId ? { ...item, commentCount: item.commentCount + 1 } : item));
     } catch (commentError) {
-      setError(commentError instanceof Error ? commentError.message : 'Could not add your comment.');
+      setError(commentError instanceof Error ? commentError.message : t('commentAddFailed'));
     }
-  }, [drafts, session?.accessToken]);
+  }, [drafts, session?.accessToken, t]);
 
   return (
     <Screen scroll={false}>
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>THE BLOOM</Text>
-        <Text style={styles.title}>Together, then.</Text>
-        <Text style={styles.subtitle}>Everything written in this circle is open now.</Text>
+        <Text style={styles.eyebrow}>{t('timelineEyebrow')}</Text>
+        <Text style={styles.title}>{t('timelineTitle')}</Text>
+        <Text style={styles.subtitle}>{t('timelineSubtitle')}</Text>
       </View>
       {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
       {isLoading ? <View style={styles.loading}><ActivityIndicator color={colors.coralDark} /></View> : (
         <FlashList
           data={entries}
           keyExtractor={item => item.publicationId}
-          ListEmptyComponent={<Text style={styles.empty}>No diary entries were shared in this circle.</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>{t('noSharedEntries')}</Text>}
           onRefresh={() => void load(true)}
           refreshing={isRefreshing}
           renderItem={({ item }) => <TimelineCard accessToken={session?.accessToken} entry={item} comments={comments[item.publicationId] ?? []} draft={drafts[item.publicationId] ?? ''} isCommentsOpen={openComments[item.publicationId] === true} onChangeDraft={value => setDrafts(current => ({ ...current, [item.publicationId]: value }))} onAddComment={() => void addComment(item)} onToggleComments={() => void toggleComments(item)} onToggleReaction={() => void toggleReaction(item)} />}
@@ -110,6 +112,7 @@ export default function BloomTimelineScreen() {
 }
 
 function TimelineCard({ accessToken, entry, comments, draft, isCommentsOpen, onChangeDraft, onAddComment, onToggleComments, onToggleReaction }: { accessToken?: string; entry: TimelineEntry; comments: ApiComment[]; draft: string; isCommentsOpen: boolean; onChangeDraft: (value: string) => void; onAddComment: () => void; onToggleComments: () => void; onToggleReaction: () => void }) {
+  const { t } = useSettings();
   const reaction = entry.reactions.find(item => item.emojiCode === PRIMARY_REACTION);
   const initial = entry.authorDisplayName.trim().charAt(0).toUpperCase() || '?';
   return (
@@ -117,22 +120,27 @@ function TimelineCard({ accessToken, entry, comments, draft, isCommentsOpen, onC
       <View style={styles.authorRow}>
         <View style={styles.avatar}><Text style={styles.avatarText}>{initial}</Text></View>
         <View style={styles.authorCopy}><Text style={styles.author}>{entry.authorDisplayName}</Text><Text style={styles.date}>{formatDate(entry.authorLocalDate)}</Text></View>
-        {entry.mood ? <Text style={styles.mood}>{entry.mood}</Text> : null}
+        {entry.mood ? <Text style={styles.mood}>{translateMood(entry.mood, t)}</Text> : null}
       </View>
       <Text style={styles.body}>{entry.text}</Text>
       {entry.mediaIds.length > 0 && accessToken ? <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.mediaGallery}>
-        {entry.mediaIds.map((mediaId, index) => <Image key={mediaId} accessibilityLabel={`Diary photo ${index + 1} of ${entry.mediaIds.length}`} contentFit="cover" source={{ uri: bloomApi.mediaUrl(mediaId), headers: { Authorization: `Bearer ${accessToken}` } }} style={styles.media} />)}
+        {entry.mediaIds.map((mediaId, index) => <Image key={mediaId} accessibilityLabel={`${t('diaryPhoto')} ${index + 1} ${t('of')} ${entry.mediaIds.length}`} contentFit="cover" source={{ uri: bloomApi.mediaUrl(mediaId), headers: { Authorization: `Bearer ${accessToken}` } }} style={styles.media} />)}
       </ScrollView> : null}
       <View style={styles.actionRow}>
-        <Pressable accessibilityLabel="React with heart" accessibilityRole="button" accessibilityState={{ selected: reaction?.reactedByCurrentUser === true }} onPress={onToggleReaction} style={[styles.reaction, reaction?.reactedByCurrentUser ? styles.reactionActive : null]}><Text style={styles.reactionText}>❤️</Text><Text style={styles.reactionCount}>{reaction?.count ?? 0}</Text></Pressable>
-        <Pressable accessibilityRole="button" onPress={onToggleComments}><Text style={styles.commentAction}>{entry.commentCount} {entry.commentCount === 1 ? 'comment' : 'comments'}</Text></Pressable>
+        <Pressable accessibilityLabel={t('reactWithHeart')} accessibilityRole="button" accessibilityState={{ selected: reaction?.reactedByCurrentUser === true }} onPress={onToggleReaction} style={[styles.reaction, reaction?.reactedByCurrentUser ? styles.reactionActive : null]}><Text style={styles.reactionText}>❤️</Text><Text style={styles.reactionCount}>{reaction?.count ?? 0}</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={onToggleComments}><Text style={styles.commentAction}>{entry.commentCount} {entry.commentCount === 1 ? t('comment') : t('comments')}</Text></Pressable>
       </View>
       {isCommentsOpen ? <View style={styles.comments}>
         {comments.map(comment => <View key={comment.id} style={styles.comment}><Text style={styles.commentAuthor}>{comment.authorDisplayName}</Text><Text style={styles.commentBody}>{comment.body}</Text></View>)}
-        <View style={styles.commentInputRow}><TextInput accessibilityLabel="Comment" maxLength={1000} onChangeText={onChangeDraft} placeholder="Say something kind" placeholderTextColor={colors.inkSoft} style={styles.commentInput} value={draft} /><Pressable accessibilityLabel="Post comment" accessibilityRole="button" disabled={!draft.trim()} onPress={onAddComment}><Text style={styles.commentSend}>Post</Text></Pressable></View>
+        <View style={styles.commentInputRow}><TextInput accessibilityLabel={t('comment')} maxLength={1000} onChangeText={onChangeDraft} placeholder={t('commentPlaceholder')} placeholderTextColor={colors.inkSoft} style={styles.commentInput} value={draft} /><Pressable accessibilityLabel={t('post')} accessibilityRole="button" disabled={!draft.trim()} onPress={onAddComment}><Text style={styles.commentSend}>{t('post')}</Text></Pressable></View>
       </View> : null}
     </View>
   );
+}
+
+function translateMood(mood: string, t: ReturnType<typeof useSettings>['t']): string {
+  if (mood === 'heavy' || mood === 'restless' || mood === 'calm' || mood === 'joyful' || mood === 'radiant') return t(mood);
+  return mood;
 }
 
 function formatDate(value: string): string {

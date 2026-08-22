@@ -33,9 +33,9 @@ const MOODS = [
   { key: "radiant", emoji: "🤩" },
 ] as const;
 const PROMPTS = [
-  { key: "small_joy", text: "What small thing made today feel lighter?" },
-  { key: "learned", text: "What did today teach you about yourself?" },
-  { key: "future", text: "What do you hope your future self remembers?" },
+  { key: "small_joy", translationKey: "promptSmallJoy" },
+  { key: "learned", translationKey: "promptLearned" },
+  { key: "future", translationKey: "promptFuture" },
 ] as const;
 
 function createClientEntryId() {
@@ -94,12 +94,12 @@ export default function WriteScreen() {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : "Could not load your sealed circles.",
+          : t("circleLoadFailed"),
       );
     } finally {
       setIsLoading(false);
     }
-  }, [session?.accessToken]);
+  }, [session?.accessToken, t]);
 
   useEffect(() => {
     void loadCircles();
@@ -123,14 +123,14 @@ export default function WriteScreen() {
         );
         setImageUris(restoredImageUris);
         if (draft.text || draft.imageUris?.length)
-          setNotice("Your unfinished diary was restored on this device.");
+          setNotice(t("restoreDraft"));
       }
       setIsDraftReady(true);
     });
     return () => {
       cancelled = true;
     };
-  }, [currentDraftKey]);
+  }, [currentDraftKey, t]);
 
   useEffect(() => {
     if (!isDraftReady || !currentDraftKey) return;
@@ -160,6 +160,7 @@ export default function WriteScreen() {
     promptKey,
     selectedCircleIds,
     text,
+    t,
   ]);
 
   const selectedCount = useMemo(
@@ -190,11 +191,11 @@ export default function WriteScreen() {
   const submit = useCallback(async () => {
     if (!session?.accessToken) return;
     if (!text.trim()) {
-      setError("Write a few words before sealing today’s diary.");
+      setError(t("writeBeforeSealing"));
       return;
     }
     if (selectedCircleIds.length === 0) {
-      setError("Choose at least one sealed circle.");
+      setError(t("chooseSealedCircle"));
       return;
     }
 
@@ -230,13 +231,13 @@ export default function WriteScreen() {
         await clearWriteDraft(currentDraftKey);
       }
       setNotice(
-        "Sealed. You can read this diary entry again when your circles bloom.",
+        t("diarySealed"),
       );
     } catch (submitError) {
       setError(
         submitError instanceof Error
           ? submitError.message
-          : "Could not seal today’s diary.",
+          : t("diarySealFailed"),
       );
     } finally {
       setIsSubmitting(false);
@@ -251,12 +252,13 @@ export default function WriteScreen() {
     selectedCircleIds,
     session?.accessToken,
     text,
+    t,
   ]);
 
   const pickImage = useCallback(async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setError("Allow photo access to attach an image.");
+      setError(t("allowPhotoAccess"));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -302,7 +304,7 @@ export default function WriteScreen() {
       <View style={styles.moodRow}>
         {MOODS.map((option) => (
           <Pressable
-            accessibilityLabel={`Mood ${option.emoji}`}
+            accessibilityLabel={`${t("moodAccessibility")} ${t(option.key)}`}
             accessibilityRole="button"
             accessibilityState={{ selected: mood === option.key }}
             key={option.key}
@@ -322,7 +324,7 @@ export default function WriteScreen() {
       </View>
 
       <TextInput
-        accessibilityLabel="Diary entry"
+        accessibilityLabel={t("diaryEntry")}
         multiline
         maxLength={5000}
         onChangeText={setText}
@@ -336,7 +338,7 @@ export default function WriteScreen() {
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Attach one photo"
+        accessibilityLabel={t("attachPhotoAccessibility")}
         onPress={() => void pickImage()}
         style={styles.photoButton}
       >
@@ -355,13 +357,13 @@ export default function WriteScreen() {
           {imageUris.map((uri, index) => (
             <View key={`${uri}-${index}`} style={styles.photoTile}>
               <Image
-                accessibilityLabel={`Selected diary photo ${index + 1}`}
+                accessibilityLabel={`${t("selectedDiaryPhoto")} ${index + 1}`}
                 contentFit="cover"
                 source={uri}
                 style={styles.photoPreview}
               />
               <Pressable
-                accessibilityLabel={`Remove photo ${index + 1}`}
+                accessibilityLabel={`${t("removePhoto")} ${index + 1}`}
                 onPress={() => removeImage(uri)}
                 style={styles.removePhoto}
               >
@@ -375,7 +377,7 @@ export default function WriteScreen() {
       <Text style={styles.section}>{t("prompt")}</Text>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Choose writing prompt"
+        accessibilityLabel={t("choosePrompt")}
         onPress={() => {
           const currentIndex = PROMPTS.findIndex(
             (prompt) => prompt.key === promptKey,
@@ -387,11 +389,13 @@ export default function WriteScreen() {
         style={styles.prompt}
       >
         <Text style={styles.promptText}>
-          {PROMPTS.find((prompt) => prompt.key === promptKey)?.text ??
-            "Tap for a gentle question to begin."}
+          {(() => {
+            const prompt = PROMPTS.find((item) => item.key === promptKey);
+            return prompt ? t(prompt.translationKey) : t("promptHint");
+          })()}
         </Text>
         <Text style={styles.promptAction}>
-          {promptKey ? "Change prompt" : "Choose prompt"}
+          {promptKey ? t("changePrompt") : t("choosePromptAction")}
         </Text>
       </Pressable>
 
@@ -413,13 +417,13 @@ export default function WriteScreen() {
       </View>
       {isLoading ? <ActivityIndicator color={colors.coralDark} /> : null}
       {!isLoading && circles.length === 0 ? (
-        <Text style={styles.empty}>Create a sealed circle before writing.</Text>
+        <Text style={styles.empty}>{t("createSealedCircle")}</Text>
       ) : null}
       {circles.map((circle) => {
         const selected = selectedCircleIds.includes(circle.id);
         return (
           <Pressable
-            accessibilityLabel={`Select ${circle.name}`}
+            accessibilityLabel={`${t("selectCircle")} ${circle.name}`}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: selected }}
             key={circle.id}
@@ -430,7 +434,7 @@ export default function WriteScreen() {
             <View style={styles.circleCopy}>
               <Text style={styles.circleName}>{circle.name}</Text>
               <Text style={styles.circleMeta}>
-                {circle.memberCount} member{circle.memberCount === 1 ? "" : "s"}
+                {circle.memberCount} {circle.memberCount === 1 ? t("member") : t("memberPlural")}
               </Text>
             </View>
             <Text style={styles.check}>{selected ? "✓" : "○"}</Text>
@@ -439,7 +443,7 @@ export default function WriteScreen() {
       })}
 
       <Pressable
-        accessibilityLabel="Seal diary entry"
+        accessibilityLabel={t("sealDiaryEntry")}
         accessibilityRole="button"
         disabled={isSubmitting}
         onPress={() => void submit()}

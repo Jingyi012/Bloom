@@ -8,6 +8,7 @@ import { clearSession, readSession, writeSession } from '@/auth/session';
 import type { CurrentUserResponse } from '@/types/api';
 import type { StoredSession } from '@/types/session';
 import { getDeviceTimeZone } from '@/utils/device';
+import { useSettings } from '@/settings/SettingsProvider';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -24,6 +25,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
+  const { t } = useSettings();
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
     androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
@@ -51,13 +53,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (response?.type !== 'success') {
-      if (response?.type === 'error') setError('Google sign-in could not be completed.');
+      if (response?.type === 'error') setError(t('signInFailed'));
       return;
     }
 
     const idToken = response.params.id_token;
     if (!idToken) {
-      setError('Google did not return an identity token.');
+      setError(t('missingIdentityToken'));
       return;
     }
 
@@ -77,8 +79,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
       } catch (error) {
         if (!cancelled) {
-          const detail = error instanceof Error ? error.message : 'Unknown sign-in error';
-          setError(`Bloom could not start your session: ${detail}`);
+          const detail = error instanceof Error ? error.message : t('unknownSignInError');
+          setError(`${t('sessionStartFailed')}: ${detail}`);
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -91,11 +93,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const signInWithGoogle = useCallback(async () => {
     setError(null);
     if (!request) {
-      setError('Google sign-in is still loading.');
+      setError(t('signInLoading'));
       return;
     }
     await promptAsync();
-  }, [promptAsync, request]);
+  }, [promptAsync, request, t]);
 
   const signOut = useCallback(async () => {
     await clearSession();

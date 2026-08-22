@@ -15,11 +15,13 @@ import type { CircleDetail } from "@/types/api";
 import { colors } from "@/styles/tokens";
 import { circleDetailStyles as styles } from "@/styles/screens/circle-detail.styles";
 import { InlineAlert } from "@/components/InlineAlert";
+import { useSettings } from "@/settings/SettingsProvider";
 
 export default function CircleDetailScreen() {
   const { circleId } = useLocalSearchParams<{ circleId: string }>();
   const router = useRouter();
   const { session } = useAuth();
+  const { t } = useSettings();
   const [detail, setDetail] = useState<CircleDetail | null>(null);
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -38,13 +40,13 @@ export default function CircleDetailScreen() {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : "Could not load this circle.",
+          : t("circleLoadDetailFailed"),
       );
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [circleId, session?.accessToken]);
+  }, [circleId, session?.accessToken, t]);
 
   useEffect(() => {
     void load();
@@ -74,28 +76,28 @@ export default function CircleDetailScreen() {
         email.trim(),
       );
       setEmail("");
-      setNotice("Invitation sent.");
+      setNotice(t("invitationSent"));
       await load();
     } catch (inviteError) {
       setError(
         inviteError instanceof Error
           ? inviteError.message
-          : "Could not send the invitation.",
+          : t("inviteFailed"),
       );
     } finally {
       setIsBusy(false);
     }
-  }, [circleId, email, load, session?.accessToken]);
+  }, [circleId, email, load, session?.accessToken, t]);
 
   const leave = useCallback(() => {
     if (!session?.accessToken || !circleId) return;
     Alert.alert(
-      "Leave this circle?",
-      "Your sealed diary entries stay private and will not be revealed to the remaining members.",
+      t("leaveCircleTitle"),
+      t("leaveCircleBody"),
       [
-        { text: "Keep circle", style: "cancel" },
+        { text: t("keepCircle"), style: "cancel" },
         {
-          text: "Leave circle",
+          text: t("leaveCircle"),
           style: "destructive",
           onPress: () =>
             void (async () => {
@@ -107,7 +109,7 @@ export default function CircleDetailScreen() {
                 setError(
                   leaveError instanceof Error
                     ? leaveError.message
-                    : "Could not leave the circle.",
+                    : t("leaveFailed"),
                 );
               } finally {
                 setIsBusy(false);
@@ -116,7 +118,7 @@ export default function CircleDetailScreen() {
         },
       ],
     );
-  }, [circleId, router, session?.accessToken]);
+  }, [circleId, router, session?.accessToken, t]);
 
   if (isLoading)
     return (
@@ -130,10 +132,10 @@ export default function CircleDetailScreen() {
     return (
       <Screen onRefresh={() => void load(true)} refreshing={isRefreshing}>
         <Pressable accessibilityRole="button" onPress={() => router.back()}>
-          <Text style={styles.back}>Back</Text>
+          <Text style={styles.back}>{t("back")}</Text>
         </Pressable>
         <InlineAlert
-          message={error ?? "Circle not found."}
+          message={error ?? t("circleNotFound")}
           onDismiss={() => setError(null)}
         />
       </Screen>
@@ -144,19 +146,19 @@ export default function CircleDetailScreen() {
     <Screen onRefresh={() => void load(true)} refreshing={isRefreshing}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Back to circles"
+        accessibilityLabel={t("backToCircles")}
         onPress={() => router.back()}
       >
-        <Text style={styles.back}>‹ Back to circles</Text>
+        <Text style={styles.back}>‹ {t("backToCircles")}</Text>
       </Pressable>
       <View style={styles.hero}>
         <Text style={styles.emoji}>{circle.emoji}</Text>
         <Text style={styles.title}>{circle.name}</Text>
-        <Text style={styles.status}>{circle.status.toUpperCase()}</Text>
+        <Text style={styles.status}>{circle.status === "Bloomed" ? t("bloomedStatus") : t("sealedStatus")}</Text>
         <Text style={styles.bloomDate}>
           {circle.status === "Bloomed"
-            ? "Your shared timeline is open."
-            : `Blooms ${formatDate(circle.bloomAtUtc)}`}
+            ? t("sharedTimelineReady")
+            : `${t("circleBlooms")} ${formatDate(circle.bloomAtUtc)}`}
         </Text>
         <View style={styles.progressTrack}>
           <View
@@ -168,15 +170,15 @@ export default function CircleDetailScreen() {
         </View>
         <Text style={styles.progressLabel}>
           {circle.status === "Bloomed"
-            ? "Fully bloomed"
-            : `${Math.round(progress * 100)}% through this season`}
+            ? t("fullyBloomed")
+            : `${Math.round(progress * 100)}% ${t("throughSeason")}`}
         </Text>
       </View>
       {error ? (
         <InlineAlert message={error} onDismiss={() => setError(null)} />
       ) : null}
       {notice ? <InlineAlert message={notice} onDismiss={() => setNotice(null)} variant="success" /> : null}
-      <Text style={styles.section}>Members · {members.length}</Text>
+      <Text style={styles.section}>{t("members")} · {members.length}</Text>
       {members.map((member) => (
         <View key={member.userId} style={styles.member}>
           <View style={styles.avatar}>
@@ -187,7 +189,7 @@ export default function CircleDetailScreen() {
           <View style={styles.memberCopy}>
             <Text style={styles.memberName}>{member.displayName}</Text>
             <Text style={styles.memberMeta}>
-              {member.role} · joined {formatDate(member.joinedAtUtc)}
+              {(member.role === "Creator" ? t("creatorRole") : t("memberRole"))} · {t("joined")} {formatDate(member.joinedAtUtc)}
             </Text>
           </View>
         </View>
@@ -195,12 +197,12 @@ export default function CircleDetailScreen() {
       {circle.isCreator && circle.status !== "Bloomed" ? (
         <View style={styles.form}>
           <TextInput
-            accessibilityLabel="Invitee email"
+            accessibilityLabel={t("inviteeEmail")}
             autoCapitalize="none"
             autoComplete="email"
             keyboardType="email-address"
             onChangeText={setEmail}
-            placeholder="friend@example.com"
+            placeholder={t("friendEmailPlaceholder")}
             placeholderTextColor={colors.inkSoft}
             style={styles.input}
             value={email}
@@ -212,7 +214,7 @@ export default function CircleDetailScreen() {
             style={styles.inviteButton}
           >
             <Text style={styles.inviteButtonText}>
-              {isBusy ? "Sending…" : "Invite a friend"}
+              {isBusy ? t("sending") : t("inviteFriend")}
             </Text>
           </Pressable>
         </View>
@@ -228,7 +230,7 @@ export default function CircleDetailScreen() {
           }
           style={styles.action}
         >
-          <Text style={styles.actionText}>Open shared timeline</Text>
+          <Text style={styles.actionText}>{t("openSharedTimeline")}</Text>
         </Pressable>
       ) : null}
       {circle.canLeave ? (
@@ -238,7 +240,7 @@ export default function CircleDetailScreen() {
           onPress={leave}
           style={styles.danger}
         >
-          <Text style={styles.dangerText}>Leave circle</Text>
+          <Text style={styles.dangerText}>{t("leaveCircle")}</Text>
         </Pressable>
       ) : null}
     </Screen>

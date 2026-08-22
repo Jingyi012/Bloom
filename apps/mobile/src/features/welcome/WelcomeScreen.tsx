@@ -6,27 +6,26 @@ import { Screen } from '@/components/Screen';
 import { colors } from '@/styles/tokens';
 import { welcomeStyles as styles } from '@/styles/screens/welcome.styles';
 import { InlineAlert } from '@/components/InlineAlert';
+import { useSettings } from '@/settings/SettingsProvider';
 
 export default function WelcomeScreen() {
   const { clearError, error, isLoading, session, signInWithGoogle } = useAuth();
+  const { t } = useSettings();
 
   if (session) return <Redirect href="/(tabs)" />;
-  if (isLoading) return <Screen scroll={false}><View style={styles.loading}><ActivityIndicator color={colors.coralDark} /><Text style={styles.note}>Opening Bloom…</Text></View></Screen>;
+  if (isLoading) return <Screen scroll={false}><View style={styles.loading}><ActivityIndicator color={colors.coralDark} /><Text style={styles.note}>{t('openingBloom')}</Text></View></Screen>;
 
   return (
     <Screen>
       <View style={styles.container}>
         <Text style={styles.emoji}>🌱</Text>
         <Text style={styles.eyebrow}>BLOOM</Text>
-        <Text style={styles.title}>Write now. Read together later.</Text>
-        <Text style={styles.body}>
-          Keep a sealed daily diary with your closest people. Choose a bloom date,
-          write freely, and open the whole season together.
-        </Text>
+        <Text style={styles.title}>{t('welcomeTitle')}</Text>
+        <Text style={styles.body}>{t('welcomeBody')}</Text>
         <View style={styles.spacer} />
         <GoogleSignInButton disabled={isLoading} onPress={() => void signInWithGoogle()} />
         {error ? <InlineAlert message={error} onDismiss={clearError} /> : null}
-        <Text style={styles.note}>Your Google account is used only to sign in to Bloom.</Text>
+        <Text style={styles.note}>{t('googleOnlyNote')}</Text>
       </View>
     </Screen>
   );

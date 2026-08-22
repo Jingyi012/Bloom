@@ -74,14 +74,14 @@ export default function CirclesScreen() {
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "Could not load circles.",
+            : t("circleLoadFailed"),
         );
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
       }
     },
-    [session?.accessToken],
+    [session?.accessToken, t],
   );
 
   useEffect(() => {
@@ -90,7 +90,7 @@ export default function CirclesScreen() {
 
   const create = useCallback(async () => {
     if (!session?.accessToken || !name.trim()) {
-      setError("Give your circle a name first.");
+      setError(t("circleNameRequired"));
       return;
     }
     setIsCreating(true);
@@ -110,12 +110,12 @@ export default function CirclesScreen() {
       setError(
         createError instanceof Error
           ? createError.message
-          : "Could not plant the circle.",
+          : t("circleCreateFailed"),
       );
     } finally {
       setIsCreating(false);
     }
-  }, [bloomAt, deviceTimeZone, load, name, session?.accessToken]);
+  }, [bloomAt, deviceTimeZone, load, name, session?.accessToken, t]);
 
   const handleBloomPickerValueChange = useCallback(
     (_event: DateTimePickerChangeEvent, selected: Date) => {
@@ -141,11 +141,11 @@ export default function CirclesScreen() {
         setError(
           responseError instanceof Error
             ? responseError.message
-            : "Could not update the invitation.",
+          : t("invitationUpdateFailed"),
         );
       }
     },
-    [load, session?.accessToken],
+    [load, session?.accessToken, t],
   );
 
   const header = useMemo(
@@ -171,9 +171,9 @@ export default function CirclesScreen() {
           <View style={styles.form}>
             <Text style={styles.formTitle}>{t("plantCircle")}</Text>
             <TextInput
-              accessibilityLabel="Circle name"
+              accessibilityLabel={t("circleName")}
               autoCapitalize="sentences"
-              placeholder="e.g. The six-month season"
+              placeholder={t("circleNamePlaceholder")}
               placeholderTextColor={colors.inkSoft}
               style={styles.input}
               value={name}
@@ -307,7 +307,7 @@ export default function CirclesScreen() {
           keyExtractor={(item) => item.id}
           ListEmptyComponent={
             <Text style={styles.empty}>
-              No circles yet. Plant one for your favorite people.
+              {t("noCirclesYet")}
             </Text>
           }
           ListHeaderComponent={header}
@@ -338,11 +338,12 @@ function CircleCard({
   circle: CircleSummary;
   onPress?: () => void;
 }) {
+  const { t } = useSettings();
   const bloomed = circle.status === "Bloomed";
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Open ${circle.name}`}
+      accessibilityLabel={`${t("openCircle")} ${circle.name}`}
       disabled={!onPress}
       onPress={onPress}
       style={styles.circleCard}
@@ -352,16 +353,16 @@ function CircleCard({
         <View style={styles.cardTitleRow}>
           <Text style={styles.cardTitle}>{circle.name}</Text>
           <Text style={[styles.status, bloomed && styles.statusBloomed]}>
-            {bloomed ? "BLOOMED" : "SEALED"}
+            {bloomed ? t("bloomedStatus") : t("sealedStatus")}
           </Text>
         </View>
         <Text style={styles.cardBody}>
           {bloomed
-            ? "Your shared timeline is ready."
-            : `Blooms ${formatDate(circle.bloomAtUtc)}`}
+            ? t("sharedTimelineReady")
+            : `${t("circleBlooms")} ${formatDate(circle.bloomAtUtc)}`}
         </Text>
         <Text style={styles.memberCount}>
-          {circle.memberCount} {circle.memberCount === 1 ? "member" : "members"}
+          {circle.memberCount} {circle.memberCount === 1 ? t("member") : t("memberPlural")}
         </Text>
       </View>
     </Pressable>

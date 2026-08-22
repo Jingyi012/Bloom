@@ -14,6 +14,7 @@ import type { CircleSummary, UserStatsResponse } from "@/types/api";
 import { colors } from "@/styles/tokens";
 import { homeStyles as styles } from "@/styles/screens/home.styles";
 import { useSettings } from "@/settings/SettingsProvider";
+import type { TranslationKey } from "@/settings/SettingsProvider";
 import { InlineAlert } from "@/components/InlineAlert";
 
 export default function HomeScreen() {
@@ -41,13 +42,13 @@ export default function HomeScreen() {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : "Could not load your garden.",
+          : t("gardenLoadFailed"),
       );
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [session?.accessToken]);
+  }, [session?.accessToken, t]);
 
   useEffect(() => {
     void load();
@@ -65,7 +66,7 @@ export default function HomeScreen() {
   const bloomed = circles
     .filter((circle) => circle.status === "Bloomed")
     .slice(0, 3);
-  const firstName = user?.displayName.split(" ")[0] || "friend";
+  const firstName = user?.displayName.split(" ")[0] || t("friend");
 
   return (
     <Screen onRefresh={() => void load(true)} refreshing={isRefreshing}>
@@ -109,6 +110,7 @@ export default function HomeScreen() {
               <CircleCard
                 key={circle.id}
                 circle={circle}
+                t={t}
                 onPress={() =>
                   router.push({
                     pathname: "/circle-detail/[circleId]",
@@ -125,6 +127,7 @@ export default function HomeScreen() {
                 <CircleCard
                   key={circle.id}
                   circle={circle}
+                  t={t}
                   onPress={() =>
                     router.push({
                       pathname: "/circle/[circleId]",
@@ -153,14 +156,16 @@ function Stat({ value, label }: { value: number; label: string }) {
 function CircleCard({
   circle,
   onPress,
+  t,
 }: {
   circle: CircleSummary;
   onPress: () => void;
+  t: (key: TranslationKey) => string;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Open ${circle.name}`}
+      accessibilityLabel={`${t("openCircle")} ${circle.name}`}
       onPress={onPress}
       style={styles.card}
     >
@@ -169,11 +174,11 @@ function CircleCard({
         <Text style={styles.cardTitle}>{circle.name}</Text>
         <Text style={styles.cardBody}>
           {circle.status === "Bloomed"
-            ? "Your shared timeline is ready."
-            : `Blooms ${formatDate(circle.bloomAtUtc)}`}
+            ? t("sharedTimelineReady")
+            : `${t("circleBlooms")} ${formatDate(circle.bloomAtUtc)}`}
         </Text>
         <Text style={styles.cardMeta}>
-          {circle.memberCount} {circle.memberCount === 1 ? "member" : "members"}
+          {circle.memberCount} {circle.memberCount === 1 ? t("member") : t("memberPlural")}
         </Text>
       </View>
       <Text style={styles.chevron}>›</Text>
