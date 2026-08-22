@@ -93,3 +93,43 @@ export type EntrySubmissionResponse = {
   authorLocalDate: string;
   submittedAtUtc: string;
 };
+
+export type Reaction = {
+  emojiCode: string;
+  count: number;
+  reactedByCurrentUser: boolean;
+};
+
+export type TimelineEntry = {
+  publicationId: string;
+  diaryEntryId: string;
+  authorUserId: string;
+  authorDisplayName: string;
+  authorAvatarUrl: string | null;
+  authorLocalDate: string;
+  submittedAtUtc: string;
+  text: string;
+  mood: string | null;
+  reactions: Reaction[];
+  commentCount: number;
+};
+
+export type TimelineResponse = {
+  items: TimelineEntry[];
+  nextCursor: string | null;
+};
+
+export type Comment = {
+  id: string;
+  authorUserId: string;
+  authorDisplayName: string;
+  authorAvatarUrl: string | null;
+  body: string;
+  createdAtUtc: string;
+  isMine: boolean;
+};
+
+export type CommentPageResponse = {
+  items: Comment[];
+  nextCursor: string | null;
+};

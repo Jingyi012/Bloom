@@ -5,6 +5,8 @@ using Bloom.Domain.Circles;
 using Bloom.Domain.Entries;
 using Bloom.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using System.Text;
+using System.Text.Json;
 
 namespace Bloom.Infrastructure.Entries;
 
@@ -14,6 +16,9 @@ public sealed class EfEntryService(
     IAuditStampWriter auditStampWriter,
     TimeProvider timeProvider) : IEntryService
 {
+    private static readonly HashSet<string> AllowedReactionCodes = ["❤️", "😊", "😂", "😢", "🔥", "👏"];
+    private const int TimelinePageSize = 30;
+    private const int CommentPageSize = 50;
     private readonly BloomDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
     private readonly IAuditStampWriter _auditStampWriter = auditStampWriter ?? throw new ArgumentNullException(nameof(auditStampWriter));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -109,6 +114,197 @@ public sealed class EfEntryService(
 
         return new EntrySubmissionResult(diaryEntry.Id, publications.Select(publication => publication.Id).ToArray(), circles.Select(circle => circle.Id).ToArray(), authorLocalDate, now);
     }
+
+    /// <inheritdoc />
+    public async Task<TimelinePage> GetTimelineAsync(Guid userId, Guid circleId, string? cursor, DateOnly? date, CancellationToken cancellationToken)
+    {
+        var circle = await _db.Circles.AsNoTracking().Include(candidate => candidate.Members)
+            .SingleOrDefaultAsync(candidate => candidate.Id == circleId, cancellationToken).ConfigureAwait(false);
+        var member = circle?.Members.FirstOrDefault(candidate => candidate.UserId == userId && candidate.LeftAtUtc is null);
+        if (circle is null || member is null) throw new KeyNotFoundException("circle_not_found");
+        if (circle.GetCurrentStatus(_timeProvider.GetUtcNow()) != CircleStatus.Bloomed) throw new CircleNotBloomedException();
+
+        var query = from publication in _db.EntryPublications.AsNoTracking()
+                    join diaryEntry in _db.DiaryEntries.AsNoTracking() on publication.DiaryEntryId equals diaryEntry.Id
+                    join author in _db.Users.AsNoTracking() on publication.AuthorUserId equals author.Id
+                    where publication.CircleId == circleId
+                        && publication.Status == EntryPublicationStatus.Sealed
+                        && diaryEntry.CreatedAtUtc >= member.JoinedAtUtc
+                    select new { publication, diaryEntry, author };
+
+        if (date is not null) query = query.Where(item => item.publication.AuthorLocalDate == date.Value);
+        var state = DecodeCursor<TimelineCursor>(cursor);
+        if (state is not null)
+        {
+            query = query.Where(item => item.publication.AuthorLocalDate > state.Date
+                || (item.publication.AuthorLocalDate == state.Date && item.publication.SubmittedAtUtc > state.SubmittedAtUtc)
+                || (item.publication.AuthorLocalDate == state.Date && item.publication.SubmittedAtUtc == state.SubmittedAtUtc && item.publication.Id.CompareTo(state.PublicationId) > 0));
+        }
+
+        var rows = await query.OrderBy(item => item.publication.AuthorLocalDate)
+            .ThenBy(item => item.publication.SubmittedAtUtc)
+            .ThenBy(item => item.publication.Id)
+            .Take(TimelinePageSize + 1)
+            .ToArrayAsync(cancellationToken).ConfigureAwait(false);
+        var hasNext = rows.Length > TimelinePageSize;
+        var pageRows = rows.Take(TimelinePageSize).ToArray();
+        var entries = await ToTimelineEntriesAsync(pageRows, userId, cancellationToken).ConfigureAwait(false);
+        var nextCursor = hasNext && pageRows.Length > 0
+            ? EncodeCursor(new TimelineCursor(pageRows[^1].publication.AuthorLocalDate, pageRows[^1].publication.SubmittedAtUtc, pageRows[^1].publication.Id))
+            : null;
+        return new TimelinePage(entries, nextCursor);
+    }
+
+    /// <inheritdoc />
+    public async Task<TimelineEntry> GetPublicationAsync(Guid userId, Guid publicationId, CancellationToken cancellationToken)
+    {
+        var row = await EnsureVisibleAsync(userId, publicationId, cancellationToken).ConfigureAwait(false);
+        return (await ToTimelineEntriesAsync([row], userId, cancellationToken).ConfigureAwait(false))[0];
+    }
+
+    /// <inheritdoc />
+    public async Task<ReactionSummary> AddReactionAsync(Guid userId, Guid publicationId, string emojiCode, CancellationToken cancellationToken)
+    {
+        var row = await EnsureVisibleAsync(userId, publicationId, cancellationToken).ConfigureAwait(false);
+        var normalized = ValidateReaction(emojiCode);
+        var existing = await _db.Reactions.SingleOrDefaultAsync(reaction => reaction.EntryPublicationId == publicationId && reaction.UserId == userId && reaction.EmojiCode == normalized, cancellationToken).ConfigureAwait(false);
+        if (existing is null)
+        {
+            var reaction = Reaction.Create(publicationId, userId, normalized);
+            _auditStampWriter.StampCreated(reaction, userId);
+            _db.Reactions.Add(reaction);
+            await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        return await GetReactionSummaryAsync(row.publication.Id, userId, normalized, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<ReactionSummary> RemoveReactionAsync(Guid userId, Guid publicationId, string emojiCode, CancellationToken cancellationToken)
+    {
+        var row = await EnsureVisibleAsync(userId, publicationId, cancellationToken).ConfigureAwait(false);
+        var normalized = ValidateReaction(emojiCode);
+        var existing = await _db.Reactions.SingleOrDefaultAsync(reaction => reaction.EntryPublicationId == publicationId && reaction.UserId == userId && reaction.EmojiCode == normalized, cancellationToken).ConfigureAwait(false);
+        if (existing is not null)
+        {
+            _auditStampWriter.StampDeleted(existing, userId);
+            await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        return await GetReactionSummaryAsync(row.publication.Id, userId, normalized, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<CommentPage> GetCommentsAsync(Guid userId, Guid publicationId, string? cursor, CancellationToken cancellationToken)
+    {
+        await EnsureVisibleAsync(userId, publicationId, cancellationToken).ConfigureAwait(false);
+        var query = from comment in _db.Comments.AsNoTracking()
+                    join author in _db.Users.AsNoTracking() on comment.AuthorUserId equals author.Id
+                    where comment.EntryPublicationId == publicationId && comment.DeletedAtUtc == null && !comment.IsHidden
+                    select new { comment, author };
+        var state = DecodeCursor<CommentCursor>(cursor);
+        if (state is not null)
+        {
+            query = query.Where(item => item.comment.CreatedAtUtc > state.CreatedAtUtc
+                || (item.comment.CreatedAtUtc == state.CreatedAtUtc && item.comment.Id.CompareTo(state.CommentId) > 0));
+        }
+        var rows = await query.OrderBy(item => item.comment.CreatedAtUtc).ThenBy(item => item.comment.Id)
+            .Take(CommentPageSize + 1).ToArrayAsync(cancellationToken).ConfigureAwait(false);
+        var hasNext = rows.Length > CommentPageSize;
+        var pageRows = rows.Take(CommentPageSize).ToArray();
+        var comments = pageRows.Select(item => new CommentResult(item.comment.Id, item.comment.AuthorUserId, item.author.DisplayName, item.author.GoogleAvatarUrl, item.comment.Body, item.comment.CreatedAtUtc, item.comment.AuthorUserId == userId)).ToArray();
+        var nextCursor = hasNext && pageRows.Length > 0 ? EncodeCursor(new CommentCursor(pageRows[^1].comment.CreatedAtUtc, pageRows[^1].comment.Id)) : null;
+        return new CommentPage(comments, nextCursor);
+    }
+
+    /// <inheritdoc />
+    public async Task<CommentResult> AddCommentAsync(Guid userId, Guid publicationId, string body, CancellationToken cancellationToken)
+    {
+        await EnsureVisibleAsync(userId, publicationId, cancellationToken).ConfigureAwait(false);
+        var author = await _db.Users.AsNoTracking().SingleAsync(user => user.Id == userId, cancellationToken).ConfigureAwait(false);
+        var comment = Comment.Create(publicationId, userId, body);
+        _auditStampWriter.StampCreated(comment, userId);
+        _db.Comments.Add(comment);
+        await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return new CommentResult(comment.Id, userId, author.DisplayName, author.GoogleAvatarUrl, comment.Body, comment.CreatedAtUtc, true);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> DeleteCommentAsync(Guid userId, Guid commentId, CancellationToken cancellationToken)
+    {
+        var comment = await _db.Comments.SingleOrDefaultAsync(candidate => candidate.Id == commentId && candidate.AuthorUserId == userId && candidate.DeletedAtUtc == null, cancellationToken).ConfigureAwait(false);
+        if (comment is null) return false;
+        await EnsureVisibleAsync(userId, comment.EntryPublicationId, cancellationToken).ConfigureAwait(false);
+        _auditStampWriter.StampDeleted(comment, userId);
+        await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    private async Task<TimelineEntry[]> ToTimelineEntriesAsync(dynamic[] rows, Guid userId, CancellationToken cancellationToken)
+    {
+        var publicationIds = rows.Select(row => (Guid)row.publication.Id).ToArray();
+        var reactions = await _db.Reactions.AsNoTracking().Where(reaction => publicationIds.Contains(reaction.EntryPublicationId) && reaction.DeletedAtUtc == null)
+            .GroupBy(reaction => new { reaction.EntryPublicationId, reaction.EmojiCode })
+            .Select(group => new { group.Key.EntryPublicationId, group.Key.EmojiCode, Count = group.Count(), Reacted = group.Any(reaction => reaction.UserId == userId) })
+            .ToArrayAsync(cancellationToken).ConfigureAwait(false);
+        var commentCounts = await _db.Comments.AsNoTracking().Where(comment => publicationIds.Contains(comment.EntryPublicationId) && comment.DeletedAtUtc == null && !comment.IsHidden)
+            .GroupBy(comment => comment.EntryPublicationId).Select(group => new { PublicationId = group.Key, Count = group.Count() }).ToDictionaryAsync(item => item.PublicationId, item => item.Count, cancellationToken).ConfigureAwait(false);
+        return rows.Select(row => new TimelineEntry(
+            row.publication.Id,
+            row.diaryEntry.Id,
+            row.author.Id,
+            row.author.DisplayName,
+            row.author.GoogleAvatarUrl,
+            row.publication.AuthorLocalDate,
+            row.publication.SubmittedAtUtc,
+            row.diaryEntry.Text,
+            row.diaryEntry.Mood,
+            reactions.Where(reaction => reaction.EntryPublicationId == row.publication.Id).Select(reaction => new ReactionSummary(reaction.EmojiCode, reaction.Count, reaction.Reacted)).ToArray(),
+            (commentCounts.ContainsKey((Guid)row.publication.Id) ? commentCounts[(Guid)row.publication.Id] : 0))).ToArray();
+    }
+
+    private async Task<dynamic> EnsureVisibleAsync(Guid userId, Guid publicationId, CancellationToken cancellationToken)
+    {
+        var row = await (from publication in _db.EntryPublications.AsNoTracking()
+                         join diaryEntry in _db.DiaryEntries.AsNoTracking() on publication.DiaryEntryId equals diaryEntry.Id
+                         join circle in _db.Circles.AsNoTracking().Include(candidate => candidate.Members) on publication.CircleId equals circle.Id
+                         select new { publication, diaryEntry, circle })
+            .SingleOrDefaultAsync(item => item.publication.Id == publicationId, cancellationToken).ConfigureAwait(false);
+        var member = row?.circle.Members.FirstOrDefault(candidate => candidate.UserId == userId && candidate.LeftAtUtc is null);
+        if (row is null || member is null || row.publication.Status != EntryPublicationStatus.Sealed) throw new PublicationNotVisibleException();
+        if (row.circle.GetCurrentStatus(_timeProvider.GetUtcNow()) != CircleStatus.Bloomed) throw new CircleNotBloomedException();
+        if (row.diaryEntry.CreatedAtUtc < member.JoinedAtUtc) throw new PublicationNotVisibleException();
+        return await (from publication in _db.EntryPublications.AsNoTracking()
+                      join diaryEntry in _db.DiaryEntries.AsNoTracking() on publication.DiaryEntryId equals diaryEntry.Id
+                      join author in _db.Users.AsNoTracking() on publication.AuthorUserId equals author.Id
+                      where publication.Id == publicationId
+                      select new { publication, diaryEntry, author }).SingleAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<ReactionSummary> GetReactionSummaryAsync(Guid publicationId, Guid userId, string emojiCode, CancellationToken cancellationToken)
+    {
+        var reactions = await _db.Reactions.AsNoTracking().Where(reaction => reaction.EntryPublicationId == publicationId && reaction.EmojiCode == emojiCode && reaction.DeletedAtUtc == null).ToArrayAsync(cancellationToken).ConfigureAwait(false);
+        return new ReactionSummary(emojiCode, reactions.Length, reactions.Any(reaction => reaction.UserId == userId));
+    }
+
+    private static string ValidateReaction(string emojiCode)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(emojiCode);
+        var normalized = emojiCode.Trim();
+        if (!AllowedReactionCodes.Contains(normalized)) throw new ArgumentException("That reaction is not supported.", nameof(emojiCode));
+        return normalized;
+    }
+
+    private static T? DecodeCursor<T>(string? cursor)
+    {
+        if (string.IsNullOrWhiteSpace(cursor)) return default;
+        try { return JsonSerializer.Deserialize<T>(Encoding.UTF8.GetString(Convert.FromBase64String(cursor))); }
+        catch (FormatException) { throw new ArgumentException("The cursor is invalid.", nameof(cursor)); }
+        catch (JsonException) { throw new ArgumentException("The cursor is invalid.", nameof(cursor)); }
+    }
+
+    private static string EncodeCursor<T>(T cursor) => Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(cursor)));
+
+    private sealed record TimelineCursor(DateOnly Date, DateTimeOffset SubmittedAtUtc, Guid PublicationId);
+    private sealed record CommentCursor(DateTimeOffset CreatedAtUtc, Guid CommentId);
 
     private static TimeZoneInfo FindTimeZone(string timeZoneId)
     {

@@ -1,4 +1,5 @@
 import { FlashList } from '@shopify/flash-list';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 import { Screen } from '@/components/Screen';
@@ -11,6 +12,7 @@ import { circlesStyles as styles } from '@/styles/screens/circles.styles';
 const DURATION_OPTIONS = [1, 3, 6, 12] as const;
 
 export default function CirclesScreen() {
+  const router = useRouter();
   const { session } = useAuth();
   const [circles, setCircles] = useState<CircleSummary[]>([]);
   const [invitations, setInvitations] = useState<CircleInvitation[]>([]);
@@ -150,7 +152,7 @@ export default function CirclesScreen() {
           ListHeaderComponent={header}
           onRefresh={() => void load(true)}
           refreshing={isRefreshing}
-          renderItem={({ item }) => <CircleCard circle={item} />}
+          renderItem={({ item }) => <CircleCard circle={item} onPress={() => item.status === 'Bloomed' ? router.push({ pathname: '/circle/[circleId]', params: { circleId: item.id } }) : undefined} />}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -158,10 +160,10 @@ export default function CirclesScreen() {
   );
 }
 
-function CircleCard({ circle }: { circle: CircleSummary }) {
+function CircleCard({ circle, onPress }: { circle: CircleSummary; onPress?: () => void }) {
   const bloomed = circle.status === 'Bloomed';
   return (
-    <View style={styles.circleCard}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Open ${circle.name}`} disabled={!onPress} onPress={onPress} style={styles.circleCard}>
       <Text style={styles.circleEmoji}>{circle.emoji}</Text>
       <View style={styles.circleCopy}>
         <View style={styles.cardTitleRow}>
@@ -171,7 +173,7 @@ function CircleCard({ circle }: { circle: CircleSummary }) {
         <Text style={styles.cardBody}>{bloomed ? 'Your shared timeline is ready.' : `Blooms ${formatDate(circle.bloomAtUtc)}`}</Text>
         <Text style={styles.memberCount}>{circle.memberCount} {circle.memberCount === 1 ? 'member' : 'members'}</Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

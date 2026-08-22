@@ -7,6 +7,10 @@ import type {
   CurrentUserResponse,
   EntrySubmissionRequest,
   EntrySubmissionResponse,
+  TimelineResponse,
+  CommentPageResponse,
+  Comment as ApiComment,
+  Reaction,
   GoogleSignInRequest,
   GoogleSignInResponse,
   InviteCircleMemberResponse,
@@ -78,6 +82,32 @@ export const bloomApi = {
   submitEntry: (accessToken: string, request: EntrySubmissionRequest) => requestJson<EntrySubmissionResponse>('/entries', {
     method: 'POST',
     body: JSON.stringify(request),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  getTimeline: (accessToken: string, circleId: string, cursor?: string) => requestJson<TimelineResponse>(`/circles/${circleId}/timeline${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  getEntry: (accessToken: string, publicationId: string) => requestJson<TimelineResponse['items'][number]>(`/entries/${publicationId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  addReaction: (accessToken: string, publicationId: string, emojiCode: string) => requestJson<Reaction>(`/entries/${publicationId}/reactions/${encodeURIComponent(emojiCode)}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  removeReaction: (accessToken: string, publicationId: string, emojiCode: string) => requestJson<Reaction>(`/entries/${publicationId}/reactions/${encodeURIComponent(emojiCode)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  getComments: (accessToken: string, publicationId: string, cursor?: string) => requestJson<CommentPageResponse>(`/entries/${publicationId}/comments${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  addComment: (accessToken: string, publicationId: string, body: string) => requestJson<ApiComment>(`/entries/${publicationId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ body }),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  deleteComment: (accessToken: string, commentId: string) => requestJson<void>(`/entries/comments/${commentId}`, {
+    method: 'DELETE',
     headers: { Authorization: `Bearer ${accessToken}` },
   }),
 };

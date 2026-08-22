@@ -29,6 +29,12 @@ public sealed class BloomDbContext(DbContextOptions<BloomDbContext> options) : D
     /// <summary>Gets persisted circle publications.</summary>
     public DbSet<EntryPublication> EntryPublications => Set<EntryPublication>();
 
+    /// <summary>Gets persisted reactions.</summary>
+    public DbSet<Reaction> Reactions => Set<Reaction>();
+
+    /// <summary>Gets persisted comments.</summary>
+    public DbSet<Comment> Comments => Set<Comment>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

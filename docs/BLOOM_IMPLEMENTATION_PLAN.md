@@ -53,6 +53,17 @@ Images, persistent local drafts, locked timeline reads, and media encryption rem
 
 Expo Router files under `apps/mobile/app` are now route shells only. Screen implementations live under `src/features`, reusable UI lives under `src/components`, API/session contracts live under `src/types`, and all screen/component styles live under `src/styles`. This keeps navigation, feature behavior, contracts, and presentation concerns independently maintainable.
 
+### Phase 4 checkpoint — bloom timeline and conversation
+
+The bloom read/social slice is now implemented end to end:
+
+- Authenticated timeline and publication-detail reads enforce active membership, joined-date visibility, withdrawal state, and server-time bloom boundaries. Pre-bloom reads return `423` with `circle_not_bloomed` and never include entry content.
+- Timeline pages use stable cursors and return author-safe metadata, sealed text, mood, reaction totals, and comment counts only after bloom.
+- Reactions are allow-listed and unique per user/publication/emoji. Comments are paginated, hidden/deleted comments are excluded, and authors can delete their own comments.
+- The mobile app opens bloomed circles from the Circles tab, refreshes on app resume, renders a FlashList timeline, and supports heart reactions and comments.
+
+The local image upload/protection and release-hardening slices remain for Phase 5. No migration has been generated yet; reaction/comment tables will be included in the final migration.
+
 ## 1. Product summary
 
 Bloom is a private, delayed-sharing diary for small groups. A user creates a **circle**, invites friends, chooses an immutable **bloom date**, and writes entries into that circle while it is sealed. When the server reaches the bloom time, eligible members can read the entries together in a shared timeline and add reactions or comments.
