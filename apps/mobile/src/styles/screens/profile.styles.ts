@@ -1,13 +1,13 @@
 import { StyleSheet } from 'react-native';
-import { colors } from '@/styles/tokens';
+import { colors, shadows, typography } from '@/styles/tokens';
 
 export const profileStyles = StyleSheet.create({
-  eyebrow: { color: colors.coralDark, fontSize: 11, fontWeight: '800', letterSpacing: 2 },
-  title: { color: colors.ink, fontSize: 28, fontWeight: '700', marginTop: 8 },
-  body: { color: colors.inkSoft, fontSize: 14, lineHeight: 21, marginTop: 8 },
-  card: { backgroundColor: colors.card, borderColor: colors.line, borderRadius: 18, borderWidth: 1, marginTop: 20, padding: 16 },
-  label: { color: colors.inkSoft, fontSize: 11, fontWeight: '800', letterSpacing: 1, marginBottom: 8, textTransform: 'uppercase' },
-  labelSpaced: { color: colors.inkSoft, fontSize: 11, fontWeight: '800', letterSpacing: 1, marginBottom: 8, marginTop: 14, textTransform: 'uppercase' },
+  eyebrow: { color: colors.coralDark, fontFamily: typography.display, fontSize: 11, letterSpacing: 2 },
+  title: { color: colors.ink, fontFamily: typography.display, fontSize: 29, marginTop: 8 },
+  body: { color: colors.inkSoft, fontFamily: typography.ui, fontSize: 14, lineHeight: 21, marginTop: 8 },
+  card: { ...shadows.card, backgroundColor: colors.card, borderColor: colors.line, borderRadius: 18, borderWidth: 1, marginTop: 20, padding: 16 },
+  label: { color: colors.inkSoft, fontFamily: typography.uiBold, fontSize: 11, letterSpacing: 1, marginBottom: 8, textTransform: 'uppercase' },
+  labelSpaced: { color: colors.inkSoft, fontFamily: typography.uiBold, fontSize: 11, letterSpacing: 1, marginBottom: 8, marginTop: 14, textTransform: 'uppercase' },
   input: { borderColor: colors.line, borderRadius: 12, borderWidth: 1, color: colors.ink, fontSize: 15, paddingHorizontal: 12, paddingVertical: 11 },
   save: { alignItems: 'center', backgroundColor: colors.coral, borderRadius: 13, marginTop: 14, minHeight: 46, justifyContent: 'center' },
   saveText: { color: colors.card, fontSize: 14, fontWeight: '800' },

@@ -1,16 +1,16 @@
 import { StyleSheet } from 'react-native';
-import { colors, spacing } from '@/styles/tokens';
+import { colors, shadows, spacing, typography } from '@/styles/tokens';
 
 export const circlesStyles = StyleSheet.create({
   headerRow: { alignItems: 'center', flexDirection: 'row', marginBottom: spacing.lg },
   headerCopy: { flex: 1 },
-  eyebrow: { color: colors.coralDark, fontSize: 11, fontWeight: '800', letterSpacing: 2 },
-  title: { color: colors.ink, fontSize: 28, fontWeight: '700', marginTop: spacing.sm },
-  subtitle: { color: colors.inkSoft, fontSize: 13, lineHeight: 19, marginTop: spacing.sm },
-  addButton: { alignItems: 'center', backgroundColor: colors.coral, borderRadius: 22, height: 44, justifyContent: 'center', width: 44 },
+  eyebrow: { color: colors.coralDark, fontFamily: typography.display, fontSize: 11, letterSpacing: 2 },
+  title: { color: colors.ink, fontFamily: typography.display, fontSize: 29, marginTop: spacing.sm },
+  subtitle: { color: colors.inkSoft, fontFamily: typography.ui, fontSize: 13, lineHeight: 19, marginTop: spacing.sm },
+  addButton: { ...shadows.button, alignItems: 'center', backgroundColor: colors.coral, borderRadius: 22, height: 44, justifyContent: 'center', width: 44 },
   addButtonText: { color: colors.card, fontSize: 28, fontWeight: '300', lineHeight: 30 },
-  form: { backgroundColor: colors.card, borderColor: colors.line, borderRadius: 20, borderWidth: 1, marginBottom: spacing.lg, padding: spacing.lg },
-  formTitle: { color: colors.ink, fontSize: 18, fontWeight: '700', marginBottom: spacing.md },
+  form: { ...shadows.card, backgroundColor: colors.card, borderColor: colors.line, borderRadius: 20, borderWidth: 1, marginBottom: spacing.lg, padding: spacing.lg },
+  formTitle: { color: colors.ink, fontFamily: typography.display, fontSize: 18, marginBottom: spacing.md },
   input: { borderColor: colors.line, borderRadius: 12, borderWidth: 1, color: colors.ink, fontSize: 15, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
   label: { color: colors.inkSoft, fontSize: 12, fontWeight: '700', marginTop: spacing.md },
   durationRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
@@ -30,11 +30,11 @@ export const circlesStyles = StyleSheet.create({
   decline: { color: colors.inkSoft, fontSize: 12 },
   error: { color: colors.coralDark, fontSize: 12, marginBottom: spacing.md },
   empty: { color: colors.inkSoft, fontSize: 14, lineHeight: 21, paddingVertical: spacing.xl },
-  circleCard: { alignItems: 'center', backgroundColor: colors.card, borderColor: colors.line, borderRadius: 20, borderWidth: 1, flexDirection: 'row', marginBottom: spacing.md, padding: spacing.lg },
+  circleCard: { ...shadows.card, alignItems: 'center', backgroundColor: colors.card, borderColor: colors.line, borderRadius: 20, borderWidth: 1, flexDirection: 'row', marginBottom: spacing.md, padding: spacing.lg },
   circleEmoji: { fontSize: 34, marginRight: spacing.md },
   circleCopy: { flex: 1 },
   cardTitleRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
-  cardTitle: { color: colors.ink, flex: 1, fontSize: 15, fontWeight: '700' },
+  cardTitle: { color: colors.ink, flex: 1, fontFamily: typography.uiBold, fontSize: 15 },
   cardBody: { color: colors.inkSoft, fontSize: 12, marginTop: spacing.xs },
   memberCount: { color: colors.sageDark, fontSize: 11, fontWeight: '700', marginTop: spacing.sm },
   status: { color: colors.coralDark, fontSize: 9, fontWeight: '800', letterSpacing: 1 },

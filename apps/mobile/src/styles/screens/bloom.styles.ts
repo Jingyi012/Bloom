@@ -1,23 +1,23 @@
 import { StyleSheet } from 'react-native';
-import { colors, spacing } from '@/styles/tokens';
+import { colors, shadows, spacing, typography } from '@/styles/tokens';
 
 export const bloomStyles = StyleSheet.create({
   header: { paddingBottom: spacing.lg },
   eyebrow: { color: colors.sageDark, fontSize: 11, fontWeight: '800', letterSpacing: 2 },
-  title: { color: colors.ink, fontSize: 28, fontWeight: '700', marginTop: spacing.sm },
-  subtitle: { color: colors.inkSoft, fontSize: 13, lineHeight: 19, marginTop: spacing.sm },
+  title: { color: colors.ink, fontFamily: typography.display, fontSize: 29, marginTop: spacing.sm },
+  subtitle: { color: colors.inkSoft, fontFamily: typography.ui, fontSize: 13, lineHeight: 19, marginTop: spacing.sm },
   loading: { alignItems: 'center', flex: 1, justifyContent: 'center' },
   error: { color: colors.coralDark, fontSize: 13, lineHeight: 19, paddingVertical: spacing.lg },
   empty: { color: colors.inkSoft, fontSize: 14, lineHeight: 21, paddingVertical: spacing.xl },
-  card: { backgroundColor: colors.card, borderColor: colors.line, borderRadius: 20, borderWidth: 1, marginBottom: spacing.md, padding: spacing.lg },
+  card: { ...shadows.card, backgroundColor: colors.card, borderColor: colors.line, borderRadius: 20, borderWidth: 1, marginBottom: spacing.md, padding: spacing.lg },
   authorRow: { alignItems: 'center', flexDirection: 'row' },
   avatar: { alignItems: 'center', backgroundColor: colors.sageLight, borderRadius: 20, height: 40, justifyContent: 'center', marginRight: spacing.sm, width: 40 },
   avatarText: { color: colors.sageDark, fontSize: 16, fontWeight: '800' },
   authorCopy: { flex: 1 },
-  author: { color: colors.ink, fontSize: 14, fontWeight: '700' },
+  author: { color: colors.ink, fontFamily: typography.uiBold, fontSize: 14 },
   date: { color: colors.inkSoft, fontSize: 11, marginTop: 2 },
   mood: { backgroundColor: colors.lavenderLight, borderRadius: 12, color: colors.sageDark, fontSize: 10, fontWeight: '700', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  body: { color: colors.ink, fontSize: 15, lineHeight: 23, marginTop: spacing.lg },
+  body: { color: colors.ink, fontFamily: typography.ui, fontSize: 15, lineHeight: 23, marginTop: spacing.lg },
   media: { borderRadius: 16, height: 220, marginTop: spacing.md, width: '100%' },
   actionRow: { alignItems: 'center', borderTopColor: colors.line, borderTopWidth: 1, flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg, paddingTop: spacing.md },
   reaction: { alignItems: 'center', backgroundColor: colors.background, borderRadius: 14, flexDirection: 'row', gap: 4, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },

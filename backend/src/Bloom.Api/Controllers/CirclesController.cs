@@ -40,7 +40,7 @@ public sealed class CirclesController(
         try
         {
             var circle = await _circleService.CreateAsync(userId, request.Name, request.Emoji, request.DurationMonths, request.TimeZoneId, cancellationToken).ConfigureAwait(false);
-            return CreatedAtAction(nameof(GetAsync), new { circleId = circle.Id }, await ToDetailAsync(circle, userId, cancellationToken).ConfigureAwait(false));
+            return Created($"/api/v1/circles/{circle.Id:D}", await ToDetailAsync(circle, userId, cancellationToken).ConfigureAwait(false));
         }
         catch (ArgumentOutOfRangeException exception)
         {

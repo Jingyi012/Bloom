@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { Screen } from '@/components/Screen';
@@ -10,7 +11,12 @@ import { colors } from '@/styles/tokens';
 import { writeStyles as styles } from '@/styles/screens/write.styles';
 import { clearWriteDraft, draftKey, readWriteDraft, saveWriteDraft } from '@/features/write/draftStorage';
 
-const MOODS = ['joyful', 'calm', 'heavy', 'restless'] as const;
+const MOODS = [
+  { key: 'joyful', label: 'Joyful', icon: 'emoticon-excited-outline', color: colors.butter },
+  { key: 'calm', label: 'Calm', icon: 'weather-sunny', color: colors.sage },
+  { key: 'heavy', label: 'Heavy', icon: 'weather-cloudy', color: colors.lavender },
+  { key: 'restless', label: 'Restless', icon: 'weather-windy', color: colors.coral },
+] as const;
 const PROMPTS = [
   { key: 'small_joy', text: 'What small thing made today feel lighter?' },
   { key: 'learned', text: 'What did today teach you about yourself?' },
@@ -189,14 +195,17 @@ export default function WriteScreen() {
       <View style={styles.chipRow}>
         {MOODS.map(option => (
           <Pressable
-            accessibilityLabel={`Mood ${option}`}
+            accessibilityLabel={`Mood ${option.label}`}
             accessibilityRole="button"
-            accessibilityState={{ selected: mood === option }}
-            key={option}
-            onPress={() => setMood(current => current === option ? undefined : option)}
-            style={[styles.chip, mood === option ? styles.chipSelected : null]}
+            accessibilityState={{ selected: mood === option.key }}
+            key={option.key}
+            onPress={() => setMood(current => current === option.key ? undefined : option.key)}
+            style={[styles.moodTile, mood === option.key ? styles.moodTileSelected : null]}
           >
-            <Text style={[styles.chipText, mood === option ? styles.chipTextSelected : null]}>{option}</Text>
+            <View style={[styles.moodIcon, { backgroundColor: `${option.color}22` }]}>
+              <MaterialCommunityIcons color={option.color} name={option.icon} size={24} />
+            </View>
+            <Text style={[styles.moodLabel, mood === option.key ? styles.moodLabelSelected : null]}>{option.label}</Text>
           </Pressable>
         ))}
       </View>

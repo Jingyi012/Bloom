@@ -172,7 +172,11 @@ public sealed class EntriesController(IEntryService entryService) : ControllerBa
         try
         {
             var comment = await _entryService.AddCommentAsync(userId, publicationId, request.Body, cancellationToken).ConfigureAwait(false);
-            return CreatedAtAction(nameof(GetCommentsAsync), new { publicationId }, new CommentResponse(comment.Id, comment.AuthorUserId, comment.AuthorDisplayName, comment.AuthorAvatarUrl, comment.Body, comment.CreatedAtUtc, true));
+            // The collection endpoint has an optional query-only cursor parameter. Using
+            // CreatedAtAction here makes MVC try to satisfy that action's route values
+            // while formatting the response, which can fail with "No route matches".
+            // The resource location is stable and explicit, so return it directly.
+            return Created($"/api/v1/entries/{publicationId:D}/comments", new CommentResponse(comment.Id, comment.AuthorUserId, comment.AuthorDisplayName, comment.AuthorAvatarUrl, comment.Body, comment.CreatedAtUtc, true));
         }
         catch (CircleNotBloomedException) { return StatusCode(StatusCodes.Status423Locked, new { code = "circle_not_bloomed" }); }
         catch (PublicationNotVisibleException) { return NotFound(); }
