@@ -107,6 +107,17 @@ export type TodayEntryStatus = {
   diaryEntryId: string | null;
   submittedAtUtc: string | null;
   circleIds: string[];
+  text: string | null;
+  mood: string | null;
+  promptKey: string | null;
+  canModify: boolean;
+  modificationEndsAtUtc: string | null;
+};
+
+export type UpdateTodayEntryRequest = {
+  text: string;
+  mood?: string;
+  promptKey?: string;
 };
 
 export type Reaction = {

@@ -9,6 +9,12 @@ public interface IEntryService
     /// <summary>Gets the current user's sealed-entry status for today.</summary>
     Task<TodayEntryStatus> GetTodayStatusAsync(Guid userId, CancellationToken cancellationToken);
 
+    /// <summary>Updates the current user's diary while today's edit window is open.</summary>
+    Task<TodayEntryStatus> UpdateTodayAsync(Guid userId, string text, string? mood, string? promptKey, CancellationToken cancellationToken);
+
+    /// <summary>Soft-deletes the current user's diary while today's edit window is open.</summary>
+    Task<bool> DeleteTodayAsync(Guid userId, CancellationToken cancellationToken);
+
     /// <summary>Submits one text entry to one or more eligible sealed circles.</summary>
     Task<EntrySubmissionResult> SubmitAsync(
         Guid authorUserId,
@@ -70,7 +76,12 @@ public sealed record TodayEntryStatus(
     DateOnly AuthorLocalDate,
     Guid? DiaryEntryId,
     DateTimeOffset? SubmittedAtUtc,
-    IReadOnlyList<Guid> CircleIds);
+    IReadOnlyList<Guid> CircleIds,
+    string? Text,
+    string? Mood,
+    string? PromptKey,
+    bool CanModify,
+    DateTimeOffset? ModificationEndsAtUtc);
 
 /// <summary>One safe, post-bloom timeline item.</summary>
 public sealed record TimelineEntry(

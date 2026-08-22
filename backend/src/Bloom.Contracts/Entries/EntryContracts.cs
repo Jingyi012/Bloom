@@ -24,7 +24,15 @@ public sealed record TodayEntryResponse(
     DateOnly AuthorLocalDate,
     Guid? DiaryEntryId,
     DateTimeOffset? SubmittedAtUtc,
-    IReadOnlyList<Guid> CircleIds);
+    IReadOnlyList<Guid> CircleIds,
+    string? Text,
+    string? Mood,
+    string? PromptKey,
+    bool CanModify,
+    DateTimeOffset? ModificationEndsAtUtc);
+
+/// <summary>Request to update the current user's diary during today's edit window.</summary>
+public sealed record UpdateTodayEntryRequest(string Text, string? Mood, string? PromptKey);
 
 /// <summary>One entry returned by a bloomed timeline.</summary>
 public sealed record TimelineEntryResponse(

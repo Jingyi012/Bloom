@@ -32,28 +32,73 @@ public sealed class EfEntryService(
     /// <inheritdoc />
     public async Task<TodayEntryStatus> GetTodayStatusAsync(Guid userId, CancellationToken cancellationToken)
     {
-        var user = await _db.Users.AsNoTracking()
-            .SingleOrDefaultAsync(candidate => candidate.Id == userId && candidate.DeletedAtUtc == null, cancellationToken)
-            .ConfigureAwait(false);
-        if (user is null) throw new KeyNotFoundException("user_not_found");
+        var context = await LoadTodayContextAsync(userId, cancellationToken).ConfigureAwait(false);
+        if (context is null)
+        {
+            var user = await _db.Users.AsNoTracking().SingleAsync(candidate => candidate.Id == userId, cancellationToken).ConfigureAwait(false);
+            var timeZone = FindTimeZone(user.TimeZoneId);
+            var localDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(_timeProvider.GetUtcNow(), timeZone).DateTime);
+            return new TodayEntryStatus(false, localDate, null, null, Array.Empty<Guid>(), null, null, null, false, null);
+        }
 
-        var now = _timeProvider.GetUtcNow();
-        var timeZone = FindTimeZone(user.TimeZoneId);
-        var localDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, timeZone).DateTime);
-        var entry = await _db.DiaryEntries.AsNoTracking()
-            .Where(candidate => candidate.AuthorUserId == userId && candidate.AuthorLocalDate == localDate && candidate.DeletedAtUtc == null)
-            .OrderByDescending(candidate => candidate.CreatedAtUtc)
-            .FirstOrDefaultAsync(cancellationToken)
-            .ConfigureAwait(false);
-        if (entry is null) return new TodayEntryStatus(false, localDate, null, null, Array.Empty<Guid>());
-
-        var circleIds = await _db.EntryPublications.AsNoTracking()
-            .Where(publication => publication.DiaryEntryId == entry.Id && publication.Status == EntryPublicationStatus.Sealed && publication.DeletedAtUtc == null)
-            .OrderBy(publication => publication.CircleId)
-            .Select(publication => publication.CircleId)
+        var mediaIds = await _db.MediaAssets.AsNoTracking()
+            .Where(media => media.DiaryEntryId == context.Entry.Id && media.DeletedAtUtc == null)
+            .OrderBy(media => media.SortOrder)
+            .Select(media => media.Id)
             .ToArrayAsync(cancellationToken)
             .ConfigureAwait(false);
-        return new TodayEntryStatus(true, localDate, entry.Id, entry.CreatedAtUtc, circleIds);
+        return new TodayEntryStatus(
+            true,
+            context.LocalDate,
+            context.Entry.Id,
+            context.Entry.CreatedAtUtc,
+            context.Publications.Select(item => item.Publication.CircleId).OrderBy(id => id).ToArray(),
+            context.CanModify ? _entryProtector.Unprotect(context.Entry.Text) : null,
+            context.CanModify ? context.Entry.Mood : null,
+            context.CanModify ? context.Entry.PromptKey : null,
+            context.CanModify,
+            context.ModificationEndsAtUtc);
+    }
+
+    /// <inheritdoc />
+    public async Task<TodayEntryStatus> UpdateTodayAsync(Guid userId, string text, string? mood, string? promptKey, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        if (text.Trim().Length > 5000) throw new ArgumentException("Entry text cannot exceed 5,000 characters.", nameof(text));
+        var context = await LoadTodayContextAsync(userId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Today's diary does not exist.");
+        EnsureCanModify(context);
+        context.Entry.Update(_entryProtector.Protect(text), mood, promptKey);
+        _auditStampWriter.StampModified(context.Entry, userId);
+        await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return await GetTodayStatusAsync(userId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> DeleteTodayAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var context = await LoadTodayContextAsync(userId, cancellationToken).ConfigureAwait(false);
+        if (context is null) return false;
+        EnsureCanModify(context);
+
+        var media = await _db.MediaAssets
+            .Where(asset => asset.DiaryEntryId == context.Entry.Id && asset.DeletedAtUtc == null)
+            .ToArrayAsync(cancellationToken)
+            .ConfigureAwait(false);
+        foreach (var publication in context.Publications)
+        {
+            publication.Publication.Withdraw();
+            _auditStampWriter.StampDeleted(publication.Publication, userId);
+        }
+        foreach (var asset in media) _auditStampWriter.StampDeleted(asset, userId);
+        _auditStampWriter.StampDeleted(context.Entry, userId);
+        await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var asset in media)
+        {
+            try { await _imageStorage.DeleteAsync(asset.RelativePath, cancellationToken).ConfigureAwait(false); }
+            catch (FileNotFoundException) { }
+        }
+        return true;
     }
 
     /// <inheritdoc />
@@ -79,7 +124,7 @@ public sealed class EfEntryService(
             throw new ArgumentException("Each circle may only be selected once.", nameof(circleIds));
 
         var existing = await _db.DiaryEntries.AsNoTracking()
-            .SingleOrDefaultAsync(entry => entry.AuthorUserId == authorUserId && entry.ClientEntryId == clientEntryId.Trim(), cancellationToken)
+            .SingleOrDefaultAsync(entry => entry.AuthorUserId == authorUserId && entry.ClientEntryId == clientEntryId.Trim() && entry.DeletedAtUtc == null, cancellationToken)
             .ConfigureAwait(false);
         if (existing is not null)
         {
@@ -369,6 +414,39 @@ public sealed class EfEntryService(
         return new ReactionSummary(emojiCode, reactions.Length, reactions.Any(reaction => reaction.UserId == userId));
     }
 
+    private async Task<TodayEntryContext?> LoadTodayContextAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var user = await _db.Users.AsNoTracking()
+            .SingleOrDefaultAsync(candidate => candidate.Id == userId && candidate.DeletedAtUtc == null, cancellationToken)
+            .ConfigureAwait(false);
+        if (user is null) throw new KeyNotFoundException("user_not_found");
+
+        var now = _timeProvider.GetUtcNow();
+        var timeZone = FindTimeZone(user.TimeZoneId);
+        var localNow = TimeZoneInfo.ConvertTime(now, timeZone);
+        var localDate = DateOnly.FromDateTime(localNow.DateTime);
+        var nextLocalMidnight = localNow.Date.AddDays(1);
+        var modificationEndsAtUtc = new DateTimeOffset(nextLocalMidnight, localNow.Offset).ToUniversalTime();
+        var entry = await _db.DiaryEntries
+            .SingleOrDefaultAsync(candidate => candidate.AuthorUserId == userId && candidate.AuthorLocalDate == localDate && candidate.DeletedAtUtc == null, cancellationToken)
+            .ConfigureAwait(false);
+        if (entry is null) return null;
+
+        var publications = await (from publication in _db.EntryPublications
+                                  join circle in _db.Circles on publication.CircleId equals circle.Id
+                                  where publication.DiaryEntryId == entry.Id && publication.DeletedAtUtc == null
+                                  select new EditablePublication(publication, circle))
+            .ToArrayAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var canModify = publications.Length > 0 && publications.All(item => item.Publication.Status == EntryPublicationStatus.Sealed && item.Circle.GetCurrentStatus(now) == CircleStatus.Sealed);
+        return new TodayEntryContext(entry, localDate, modificationEndsAtUtc, canModify, publications);
+    }
+
+    private static void EnsureCanModify(TodayEntryContext context)
+    {
+        if (!context.CanModify) throw new InvalidOperationException("Today's diary can no longer be changed.");
+    }
+
     private static string ValidateReaction(string emojiCode)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(emojiCode);
@@ -389,6 +467,8 @@ public sealed class EfEntryService(
 
     private sealed record TimelineCursor(DateOnly Date, DateTimeOffset SubmittedAtUtc, Guid PublicationId);
     private sealed record CommentCursor(DateTimeOffset CreatedAtUtc, Guid CommentId);
+    private sealed record EditablePublication(EntryPublication Publication, Circle Circle);
+    private sealed record TodayEntryContext(DiaryEntry Entry, DateOnly LocalDate, DateTimeOffset ModificationEndsAtUtc, bool CanModify, IReadOnlyList<EditablePublication> Publications);
 
     private static TimeZoneInfo FindTimeZone(string timeZoneId)
     {

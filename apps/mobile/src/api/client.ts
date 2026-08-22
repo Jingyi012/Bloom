@@ -9,6 +9,7 @@ import type {
   EntrySubmissionResponse,
   TimelineResponse,
   TodayEntryStatus,
+  UpdateTodayEntryRequest,
   CommentPageResponse,
   Comment as ApiComment,
   Reaction,
@@ -105,6 +106,15 @@ export const bloomApi = {
     headers: { Authorization: `Bearer ${accessToken}` },
   }),
   getTodayEntry: (accessToken: string) => requestJson<TodayEntryStatus>('/entries/today', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  updateTodayEntry: (accessToken: string, request: UpdateTodayEntryRequest) => requestJson<TodayEntryStatus>('/entries/today', {
+    method: 'PATCH',
+    body: JSON.stringify(request),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  deleteTodayEntry: (accessToken: string) => requestJson<void>('/entries/today', {
+    method: 'DELETE',
     headers: { Authorization: `Bearer ${accessToken}` },
   }),
   submitEntry: (accessToken: string, request: EntrySubmissionRequest) => requestJson<EntrySubmissionResponse>('/entries', {

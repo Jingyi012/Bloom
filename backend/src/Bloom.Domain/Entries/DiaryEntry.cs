@@ -57,4 +57,14 @@ public sealed class DiaryEntry : AuditableEntity
             PromptKey = string.IsNullOrWhiteSpace(promptKey) ? null : promptKey.Trim(),
         };
     }
+
+    /// <summary>Updates the private content while the diary is still editable.</summary>
+    public void Update(string text, string? mood, string? promptKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        if (text.Trim().Length > 20000) throw new ArgumentException("Entry payload cannot exceed 20,000 characters.", nameof(text));
+        Text = text.Trim();
+        Mood = string.IsNullOrWhiteSpace(mood) ? null : mood.Trim();
+        PromptKey = string.IsNullOrWhiteSpace(promptKey) ? null : promptKey.Trim();
+    }
 }

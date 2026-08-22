@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   AppState,
   Pressable,
   ScrollView,
@@ -14,7 +15,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Screen } from "@/components/Screen";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
-import type { CircleSummary, EntrySubmissionResponse, TodayEntryStatus } from "@/types/api";
+import type { CircleSummary, TodayEntryStatus } from "@/types/api";
 import { colors } from "@/styles/tokens";
 import { writeStyles as styles } from "@/styles/screens/write.styles";
 import {
@@ -74,6 +75,7 @@ export default function WriteScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isTodayStatusLoading, setIsTodayStatusLoading] = useState(true);
   const [todayStatus, setTodayStatus] = useState<TodayEntryStatus | null>(null);
+  const [isEditingToday, setIsEditingToday] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -226,9 +228,59 @@ export default function WriteScreen() {
     );
   }, [circles]);
 
+  const clearEditor = useCallback(async () => {
+    setText("");
+    setMood(undefined);
+    setPromptKey(undefined);
+    setSelectedCircleIds([]);
+    photoIdentityByUri.current.clear();
+    setImageUris([]);
+    setDraftClientEntryId(null);
+    if (currentDraftKey) {
+      skipNextDraftSave.current = true;
+      await clearWriteDraft(currentDraftKey);
+    }
+  }, [currentDraftKey]);
+
+  const beginEditingToday = useCallback(() => {
+    if (!todayStatus?.hasEntry || !todayStatus.canModify) return;
+    setText(todayStatus.text ?? "");
+    setMood(todayStatus.mood ?? undefined);
+    setPromptKey(todayStatus.promptKey ?? undefined);
+    setSelectedCircleIds(todayStatus.circleIds);
+    setIsEditingToday(true);
+    setError(null);
+    setNotice(null);
+  }, [todayStatus]);
+
+  const deleteToday = useCallback(() => {
+    if (!session?.accessToken || !todayStatus?.hasEntry || !todayStatus.canModify) return;
+    Alert.alert(t("deleteTodayTitle"), t("deleteTodayBody"), [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("deleteToday"),
+        style: "destructive",
+        onPress: () => void (async () => {
+          try {
+            setIsSubmitting(true);
+            await bloomApi.deleteTodayEntry(session.accessToken);
+            setIsEditingToday(false);
+            await clearEditor();
+            await loadTodayStatus();
+            setNotice(t("todayDeleted"));
+          } catch (deleteError) {
+            setError(deleteError instanceof Error ? deleteError.message : t("todayStatusLoadFailed"));
+          } finally {
+            setIsSubmitting(false);
+          }
+        })(),
+      },
+    ]);
+  }, [clearEditor, loadTodayStatus, session?.accessToken, t, todayStatus]);
+
   const submit = useCallback(async () => {
     if (!session?.accessToken) return;
-    if (isTodayStatusLoading || todayStatus?.hasEntry) return;
+    if (isTodayStatusLoading || (todayStatus?.hasEntry && !isEditingToday)) return;
     if (!text.trim()) {
       setError(t("writeBeforeSealing"));
       return;
@@ -242,47 +294,30 @@ export default function WriteScreen() {
     setError(null);
     setNotice(null);
     try {
-      const submission = {
-        clientEntryId: draftClientEntryId ?? createClientEntryId(),
-        authorLocalDate: localDate,
-        authorTimeZoneId: getDeviceTimeZone(),
-        text: text.trim(),
-        mood,
-        promptKey,
-        circleIds: selectedCircleIds,
-      };
-      let result: EntrySubmissionResponse;
-      if (imageUris.length > 0)
-        result = await bloomApi.submitEntryWithMedia(
-          session.accessToken,
-          submission,
-          imageUris,
-        );
-      else result = await bloomApi.submitEntry(session.accessToken, submission);
-      setTodayStatus({
-        hasEntry: true,
-        authorLocalDate: result.authorLocalDate,
-        diaryEntryId: result.diaryEntryId,
-        submittedAtUtc: result.submittedAtUtc,
-        circleIds: result.circleIds,
-      });
-      setText("");
-      setMood(undefined);
-      setPromptKey(undefined);
-      setSelectedCircleIds([]);
-      photoIdentityByUri.current.clear();
-      setImageUris([]);
-      setDraftClientEntryId(null);
-      if (currentDraftKey) {
-        skipNextDraftSave.current = true;
-        await clearWriteDraft(currentDraftKey);
+      if (isEditingToday) {
+        await bloomApi.updateTodayEntry(session.accessToken, { text: text.trim(), mood, promptKey });
+        setIsEditingToday(false);
+        await clearEditor();
+        await loadTodayStatus();
+        setNotice(t("todayUpdated"));
+      } else {
+        const submission = {
+          clientEntryId: draftClientEntryId ?? createClientEntryId(),
+          authorLocalDate: localDate,
+          authorTimeZoneId: getDeviceTimeZone(),
+          text: text.trim(), mood, promptKey, circleIds: selectedCircleIds,
+        };
+        if (imageUris.length > 0)
+          await bloomApi.submitEntryWithMedia(session.accessToken, submission, imageUris);
+        else await bloomApi.submitEntry(session.accessToken, submission);
+        await clearEditor();
+        await loadTodayStatus();
+        setNotice(t("diarySealed"));
       }
-      setNotice(
-        t("diarySealed"),
-      );
     } catch (submitError) {
       if (submitError instanceof Error && submitError.message.includes("(409)")) {
         await loadTodayStatus();
+        setIsEditingToday(false);
         setNotice(t("todayAlreadySealed"));
       } else {
         setError(
@@ -296,6 +331,7 @@ export default function WriteScreen() {
     }
   }, [
     currentDraftKey,
+    clearEditor,
     draftClientEntryId,
     imageUris,
     localDate,
@@ -305,6 +341,7 @@ export default function WriteScreen() {
     session?.accessToken,
     text,
     isTodayStatusLoading,
+    isEditingToday,
     loadTodayStatus,
     todayStatus?.hasEntry,
     t,
@@ -359,19 +396,32 @@ export default function WriteScreen() {
         <View style={styles.statusLoading}>
           <ActivityIndicator color={colors.coralDark} />
         </View>
-      ) : todayStatus?.hasEntry ? (
+      ) : todayStatus?.hasEntry && !isEditingToday ? (
         <View style={styles.sealedCard}>
           <View style={styles.sealedIcon}>
             <MaterialCommunityIcons color={colors.sageDark} name="lock-check-outline" size={28} />
           </View>
           <Text style={styles.sealedTitle}>{t("todaySealedTitle")}</Text>
-          <Text style={styles.sealedBody}>{t("todaySealedBody")}</Text>
+          <Text style={styles.sealedBody}>{todayStatus.canModify ? t("todayEditableBody") : t("todayLockedBody")}</Text>
           {todayStatus.submittedAtUtc ? (
             <Text style={styles.sealedMeta}>{formatSubmittedAt(todayStatus.submittedAtUtc)}</Text>
           ) : null}
           <Text style={styles.sealedMeta}>
             {todayStatus.circleIds.length} {t("circles")}
           </Text>
+          {todayStatus.canModify ? (
+            <>
+              {todayStatus.modificationEndsAtUtc ? <Text style={styles.sealedMeta}>{t("todayEditUntil")} {formatSubmittedAt(todayStatus.modificationEndsAtUtc)}</Text> : null}
+              <View style={styles.sealedActions}>
+                <Pressable accessibilityRole="button" accessibilityLabel={t("editToday")} onPress={beginEditingToday} style={[styles.sealedAction, styles.sealedActionSecondary]}>
+                  <Text style={styles.sealedActionText}>{t("editToday")}</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={t("deleteToday")} onPress={deleteToday} style={[styles.sealedAction, styles.sealedActionDanger]}>
+                  <Text style={[styles.sealedActionText, styles.sealedActionDangerText]}>{t("deleteToday")}</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : null}
         </View>
       ) : (
         <>
@@ -414,8 +464,9 @@ export default function WriteScreen() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t("attachPhotoAccessibility")}
+        disabled={isEditingToday}
         onPress={() => void pickImage()}
-        style={styles.photoButton}
+        style={[styles.photoButton, isEditingToday ? styles.submitDisabled : null]}
       >
         <Text style={styles.photoButtonText}>
           {imageUris.length > 0
@@ -453,6 +504,7 @@ export default function WriteScreen() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t("choosePrompt")}
+        disabled={isEditingToday}
         onPress={() => {
           const currentIndex = PROMPTS.findIndex(
             (prompt) => prompt.key === promptKey,
@@ -483,6 +535,7 @@ export default function WriteScreen() {
               allCirclesSelected ? t("clearAll") : t("selectAll")
             }
             onPress={toggleAllCircles}
+            disabled={isEditingToday}
           >
             <Text style={styles.selectAll}>
               {allCirclesSelected ? t("clearAll") : t("selectAll")}
@@ -503,6 +556,7 @@ export default function WriteScreen() {
             accessibilityState={{ checked: selected }}
             key={circle.id}
             onPress={() => toggleCircle(circle.id)}
+            disabled={isEditingToday}
             style={[styles.circle, selected ? styles.circleSelected : null]}
           >
             <Text style={styles.circleEmoji}>{circle.emoji}</Text>
@@ -518,7 +572,7 @@ export default function WriteScreen() {
       })}
 
       <Pressable
-        accessibilityLabel={t("sealDiaryEntry")}
+        accessibilityLabel={isEditingToday ? t("saveChanges") : t("sealDiaryEntry")}
         accessibilityRole="button"
         disabled={isSubmitting}
         onPress={() => void submit()}
@@ -532,7 +586,7 @@ export default function WriteScreen() {
           <ActivityIndicator color={colors.card} />
         ) : (
           <Text style={styles.submitText}>
-            {t("sealDiary")}
+            {isEditingToday ? t("saveChanges") : t("sealDiary")}
             {selectedCount > 0 ? ` · ${selectedCount}` : ""}
           </Text>
         )}

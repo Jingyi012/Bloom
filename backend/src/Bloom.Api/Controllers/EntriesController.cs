@@ -26,12 +26,50 @@ public sealed class EntriesController(IEntryService entryService) : ControllerBa
         try
         {
             var status = await _entryService.GetTodayStatusAsync(userId, cancellationToken).ConfigureAwait(false);
-            return Ok(new TodayEntryResponse(status.HasEntry, status.AuthorLocalDate, status.DiaryEntryId, status.SubmittedAtUtc, status.CircleIds));
+            return Ok(ToTodayResponse(status));
         }
         catch (KeyNotFoundException)
         {
             return NotFound();
         }
+    }
+
+    /// <summary>Updates the current user's diary while today's edit window is open.</summary>
+    [HttpPatch("today")]
+    [ProducesResponseType(typeof(TodayEntryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<TodayEntryResponse>> UpdateTodayAsync(UpdateTodayEntryRequest request, CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        if (request is null) return BadRequest();
+        try
+        {
+            var status = await _entryService.UpdateTodayAsync(userId, request.Text, request.Mood, request.PromptKey, cancellationToken).ConfigureAwait(false);
+            return Ok(ToTodayResponse(status));
+        }
+        catch (ArgumentException exception) { return BadRequest(exception.Message); }
+        catch (KeyNotFoundException exception) { return NotFound(exception.Message); }
+        catch (InvalidOperationException exception) { return Conflict(exception.Message); }
+    }
+
+    /// <summary>Soft-deletes the current user's diary while today's edit window is open.</summary>
+    [HttpDelete("today")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult> DeleteTodayAsync(CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        try
+        {
+            return await _entryService.DeleteTodayAsync(userId, cancellationToken).ConfigureAwait(false) ? NoContent() : NotFound();
+        }
+        catch (KeyNotFoundException exception) { return NotFound(exception.Message); }
+        catch (InvalidOperationException exception) { return Conflict(exception.Message); }
     }
 
     /// <summary>Submits one text entry to one or more sealed circles.</summary>
@@ -235,4 +273,16 @@ public sealed class EntriesController(IEntryService entryService) : ControllerBa
         item.MediaIds,
         item.Reactions.Select(reaction => new ReactionResponse(reaction.EmojiCode, reaction.Count, reaction.ReactedByCurrentUser)).ToArray(),
         item.CommentCount);
+
+    private static TodayEntryResponse ToTodayResponse(TodayEntryStatus status) => new(
+        status.HasEntry,
+        status.AuthorLocalDate,
+        status.DiaryEntryId,
+        status.SubmittedAtUtc,
+        status.CircleIds,
+        status.Text,
+        status.Mood,
+        status.PromptKey,
+        status.CanModify,
+        status.ModificationEndsAtUtc);
 }
