@@ -23,4 +23,7 @@ public sealed class BloomOptions
     /// <summary>Gets or sets the refresh-token lifetime in days.</summary>
     [Range(1, 365)]
     public int RefreshTokenDays { get; set; } = 30;
+
+    /// <summary>Gets or sets whether pending EF migrations are applied during startup.</summary>
+    public bool ApplyMigrationsOnStartup { get; set; }
 }

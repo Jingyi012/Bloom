@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: bloom-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bloom
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+    ports:
+      - "5432:5432"
+    volumes:
+      - bloom-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  bloom-postgres-data:

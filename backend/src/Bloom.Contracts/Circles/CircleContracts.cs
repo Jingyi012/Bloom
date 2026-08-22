@@ -1,0 +1,48 @@
+namespace Bloom.Contracts.Circles;
+
+/// <summary>Request to plant a sealed circle.</summary>
+public sealed record CreateCircleRequest(
+    string Name,
+    string Emoji,
+    int DurationMonths,
+    string TimeZoneId);
+
+/// <summary>Request to invite an existing Bloom user.</summary>
+public sealed record InviteCircleMemberRequest(string Email);
+
+/// <summary>Request to accept or decline an invitation.</summary>
+public sealed record RespondToInvitationRequest(bool Accept);
+
+/// <summary>Safe circle member information.</summary>
+public sealed record CircleMemberResponse(
+    Guid UserId,
+    string DisplayName,
+    string? AvatarUrl,
+    string Role,
+    DateTimeOffset JoinedAtUtc,
+    bool IsActive);
+
+/// <summary>Safe circle summary information.</summary>
+public sealed record CircleSummaryResponse(
+    Guid Id,
+    string Name,
+    string Emoji,
+    string Status,
+    DateTimeOffset BloomAtUtc,
+    string TimeZoneId,
+    int MemberCount,
+    bool IsCreator,
+    bool CanLeave);
+
+/// <summary>Circle details and active members.</summary>
+public sealed record CircleDetailResponse(
+    CircleSummaryResponse Circle,
+    IReadOnlyList<CircleMemberResponse> Members);
+
+/// <summary>Pending invitation information.</summary>
+public sealed record CircleInvitationResponse(
+    Guid Id,
+    Guid CircleId,
+    string CircleName,
+    string CircleEmoji,
+    DateTimeOffset CreatedAtUtc);

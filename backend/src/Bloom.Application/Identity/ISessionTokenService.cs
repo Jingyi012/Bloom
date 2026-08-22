@@ -19,7 +19,8 @@ public interface ISessionTokenService
 
     /// <summary>Revokes a refresh token.</summary>
     /// <param name="refreshToken">The opaque refresh token.</param>
-    void Revoke(string refreshToken);
+    /// <param name="cancellationToken">The cancellation token.</param>
+    Task RevokeAsync(string refreshToken, CancellationToken cancellationToken);
 }
 
 /// <summary>Contains Bloom session credentials.</summary>

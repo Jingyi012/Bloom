@@ -3,6 +3,7 @@ using Bloom.Api.Configuration;
 using Bloom.Api.Security;
 using Bloom.Application.Identity;
 using Bloom.Infrastructure;
+using Bloom.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.IdentityModel.Tokens;
@@ -31,8 +32,8 @@ builder.Services
     .ValidateOnStart();
 
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddBloomInfrastructure();
-builder.Services.AddSingleton<ISessionTokenService, SessionTokenService>();
+builder.Services.AddBloomInfrastructure(builder.Configuration);
+builder.Services.AddScoped<ISessionTokenService, SessionTokenService>();
 
 var googleOptions = builder.Configuration.GetSection(GoogleOptions.SectionName).Get<GoogleOptions>() ?? new GoogleOptions();
 var googleClientIds = new[]
@@ -92,6 +93,11 @@ builder.Services
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+if (builder.Configuration.GetValue<bool>("Bloom:ApplyMigrationsOnStartup"))
+{
+    await app.ApplyBloomMigrationsAsync();
+}
 
 if (!app.Environment.IsDevelopment())
 {

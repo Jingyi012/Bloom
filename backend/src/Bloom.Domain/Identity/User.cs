@@ -17,6 +17,9 @@ public sealed class User : AuditableEntity
     /// <summary>Gets the verified email returned by Google.</summary>
     public string Email { get; private set; } = string.Empty;
 
+    /// <summary>Gets the normalized email used for case-insensitive lookups.</summary>
+    public string EmailNormalized { get; private set; } = string.Empty;
+
     /// <summary>Gets whether the provider verified the email claim.</summary>
     public bool EmailVerified { get; private set; }
 
@@ -54,6 +57,7 @@ public sealed class User : AuditableEntity
         {
             GoogleSubject = googleSubject,
             Email = email,
+            EmailNormalized = email.Trim().ToUpperInvariant(),
             EmailVerified = emailVerified,
             DisplayName = displayName,
             GoogleAvatarUrl = avatarUrl,

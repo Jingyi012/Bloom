@@ -93,10 +93,10 @@ public sealed class AuthController(
     [HttpPost("logout")]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public IActionResult Logout(SessionRefreshRequest request)
+    public async Task<IActionResult> Logout(SessionRefreshRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        _sessionTokenService.Revoke(request.RefreshToken);
+        await _sessionTokenService.RevokeAsync(request.RefreshToken, cancellationToken).ConfigureAwait(false);
         return NoContent();
     }
 }

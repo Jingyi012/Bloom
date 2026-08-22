@@ -13,10 +13,30 @@ The first vertical slice is now scaffolded in the repository:
 - `backend/Bloom.slnx`: .NET 10 projects for API, Application, Domain, Infrastructure, Contracts, and tests.
 - `Bloom.Api`: Google bearer-token validation boundary, Bloom access/refresh sessions, authenticated `/api/v1/me`, `/health`, local Data Protection key directory, and development-safe console logging.
 - `Bloom.Domain`/`Bloom.Application`: Google user aggregate, common audit fields, and audit stamping services.
-- `Bloom.Infrastructure`: an explicitly temporary in-memory user adapter so the first slice runs without a mismatched database provider.
+- `Bloom.Infrastructure`: EF Core 10 + Npgsql PostgreSQL persistence for users, circles, memberships, invitations, and refresh sessions.
 - `Bloom.UnitTests`: five passing audit/identity tests.
 
-The next required backend slice is the persistence adapter and migrations. The current auth/user/session state is process-local and will be lost on restart; do not treat it as production-ready. The local project image folder and PostgreSQL adapter should be added only after choosing a stable provider compatible with the installed .NET/EF version.
+EF Core is configured for PostgreSQL, but migrations are intentionally deferred until all domain phases are complete. Each domain has its own Fluent API configuration, and table names use the PascalCase domain entity names. Use the repository `docker-compose.yml` for a local PostgreSQL instance, or override `ConnectionStrings__BloomDb` with an existing PostgreSQL connection string.
+
+### Phase 2 checkpoint — circles and invitations
+
+The first circles vertical slice is now implemented end to end:
+
+- Authenticated .NET endpoints create, list, view, invite, accept/decline, and leave circles.
+- Circle creation supports the 1, 3, 6, and 12 month presets, stores the creator/member roles, applies audit stamps, and derives the sealed/bloomed state from server time.
+- Invitation previews are available before acceptance and are scoped to the invitee.
+- The mobile Circles tab loads circles and pending invitations, supports pull-to-refresh, creates circles, and accepts or declines invitations.
+
+Circle, invitation, user, and refresh-session state is now persisted through EF Core/PostgreSQL. The remaining Phase 2 work is integration coverage against a disposable PostgreSQL database and the full member-management UI.
+
+Local PostgreSQL setup:
+
+```text
+docker compose up -d postgres
+dotnet run --project backend/src/Bloom.Api/Bloom.Api.csproj --launch-profile http
+```
+
+The API reads `ConnectionStrings:BloomDb`; `ConnectionStrings__BloomDb` can override it for an existing PostgreSQL installation. `Bloom:ApplyMigrationsOnStartup` remains disabled until the final migration is generated after all phases.
 
 ## 1. Product summary
 
@@ -580,7 +600,7 @@ Each phase should end in a deployable, tested vertical slice.
 ### Phase 0 — decisions and scaffolding
 
 - Confirm the product rules in section 2 and MVP boundary.
-- Create the monorepo layout, mobile app, .NET solution, local container dependencies, CI, formatting/linting, OpenAPI generation, environment configuration, and architecture decision records.
+- Create the monorepo layout, mobile app, .NET solution, local container dependencies, CI, formatting/linting, OpenAPI generation, environment configuration, and architecture decision records. Defer the first production migration until all domain phases have settled.
 - Extract the design tokens/components and implement a static navigation shell from the mockup.
 - Establish staging/production environments, secrets, telemetry, and database migrations.
 
@@ -600,7 +620,7 @@ Exit: a user can safely create and resume a session on iOS and Android.
 - Search/invite existing Bloom users, accept/decline, member list, and leave behavior.
 - Home/circles empty and populated states, progress ring, safe contribution heatmap.
 
-Exit: two test users can join a sealed circle, and authorization/date rules pass integration tests.
+Exit: two PostgreSQL-backed test users can join a sealed circle, and authorization/date rules pass integration tests.
 
 ### Phase 3 — sealed writing and media
 
