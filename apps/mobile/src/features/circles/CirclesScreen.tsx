@@ -8,12 +8,15 @@ import { bloomApi } from '@/api/client';
 import type { CircleInvitation, CircleSummary } from '@/types/api';
 import { colors } from '@/styles/tokens';
 import { circlesStyles as styles } from '@/styles/screens/circles.styles';
+import { useSettings } from '@/settings/SettingsProvider';
+import { getDeviceTimeZone } from '@/utils/device';
 
 const DURATION_OPTIONS = [1, 3, 6, 12] as const;
 
 export default function CirclesScreen() {
   const router = useRouter();
   const { session } = useAuth();
+  const { t } = useSettings();
   const [circles, setCircles] = useState<CircleSummary[]>([]);
   const [invitations, setInvitations] = useState<CircleInvitation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,7 +60,7 @@ export default function CirclesScreen() {
         name: name.trim(),
         emoji: '🌱',
         durationMonths,
-        timeZoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        timeZoneId: getDeviceTimeZone(),
       });
       setName('');
       setShowCreateForm(false);
@@ -83,18 +86,18 @@ export default function CirclesScreen() {
     <View>
       <View style={styles.headerRow}>
         <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>YOUR GARDEN</Text>
-          <Text style={styles.title}>Your circles</Text>
-          <Text style={styles.subtitle}>Small groups, sealed seasons, shared memories.</Text>
+          <Text style={styles.eyebrow}>{t('yourGarden')}</Text>
+          <Text style={styles.title}>{t('yourCircles')}</Text>
+          <Text style={styles.subtitle}>{t('circlesSubtitle')}</Text>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Plant a new circle" style={styles.addButton} onPress={() => setShowCreateForm((visible) => !visible)}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('plantCircle')} style={styles.addButton} onPress={() => setShowCreateForm((visible) => !visible)}>
           <Text style={styles.addButtonText}>＋</Text>
         </Pressable>
       </View>
 
       {showCreateForm ? (
         <View style={styles.form}>
-          <Text style={styles.formTitle}>Plant a circle</Text>
+          <Text style={styles.formTitle}>{t('plantCircle')}</Text>
           <TextInput
             accessibilityLabel="Circle name"
             autoCapitalize="sentences"
@@ -104,7 +107,7 @@ export default function CirclesScreen() {
             value={name}
             onChangeText={setName}
           />
-          <Text style={styles.label}>Bloom after</Text>
+          <Text style={styles.label}>{t('bloomAfter')}</Text>
           <View style={styles.durationRow}>
             {DURATION_OPTIONS.map((option) => (
               <Pressable key={option} accessibilityRole="button" style={[styles.durationChip, durationMonths === option && styles.durationChipActive]} onPress={() => setDurationMonths(option)}>
@@ -113,24 +116,24 @@ export default function CirclesScreen() {
             ))}
           </View>
           <Pressable accessibilityRole="button" disabled={isCreating} style={styles.primaryButton} onPress={() => void create()}>
-            {isCreating ? <ActivityIndicator color={colors.card} /> : <Text style={styles.primaryButtonText}>Plant circle</Text>}
+            {isCreating ? <ActivityIndicator color={colors.card} /> : <Text style={styles.primaryButtonText}>{t('plantCircle')}</Text>}
           </Pressable>
         </View>
       ) : null}
 
       {invitations.length > 0 ? (
         <View style={styles.invitations}>
-          <Text style={styles.sectionTitle}>Invitations</Text>
+          <Text style={styles.sectionTitle}>{t('invitations')}</Text>
           {invitations.map((invitation) => (
             <View key={invitation.id} style={styles.invitationCard}>
               <Text style={styles.invitationEmoji}>{invitation.circleEmoji}</Text>
               <View style={styles.invitationCopy}>
                 <Text style={styles.cardTitle}>{invitation.circleName}</Text>
-                <Text style={styles.cardBody}>Join this sealed circle?</Text>
+                <Text style={styles.cardBody}>{t('joinQuestion')}</Text>
               </View>
               <View style={styles.invitationActions}>
-                <Pressable accessibilityRole="button" onPress={() => void respond(invitation.id, false)}><Text style={styles.decline}>Decline</Text></Pressable>
-                <Pressable accessibilityRole="button" onPress={() => void respond(invitation.id, true)}><Text style={styles.accept}>Join</Text></Pressable>
+                <Pressable accessibilityRole="button" onPress={() => void respond(invitation.id, false)}><Text style={styles.decline}>{t('decline')}</Text></Pressable>
+                <Pressable accessibilityRole="button" onPress={() => void respond(invitation.id, true)}><Text style={styles.accept}>{t('join')}</Text></Pressable>
               </View>
             </View>
           ))}
@@ -138,9 +141,9 @@ export default function CirclesScreen() {
       ) : null}
 
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-      <Text style={styles.sectionTitle}>Active circles</Text>
+      <Text style={styles.sectionTitle}>{t('activeCirclesTitle')}</Text>
     </View>
-  ), [create, durationMonths, error, invitations, isCreating, name, respond, showCreateForm]);
+  ), [create, durationMonths, error, invitations, isCreating, name, respond, showCreateForm, t]);
 
   return (
     <Screen scroll={false}>
@@ -150,6 +153,7 @@ export default function CirclesScreen() {
           keyExtractor={(item) => item.id}
           ListEmptyComponent={<Text style={styles.empty}>No circles yet. Plant one for your favorite people.</Text>}
           ListHeaderComponent={header}
+          contentContainerStyle={styles.listContent}
           onRefresh={() => void load(true)}
           refreshing={isRefreshing}
           renderItem={({ item }) => <CircleCard circle={item} onPress={() => router.push({ pathname: '/circle-detail/[circleId]', params: { circleId: item.id } })} />}

@@ -97,7 +97,7 @@ export default function BloomTimelineScreen() {
         <FlashList
           data={entries}
           keyExtractor={item => item.publicationId}
-          ListEmptyComponent={<Text style={styles.empty}>No pages were shared in this circle.</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>No diary entries were shared in this circle.</Text>}
           onRefresh={() => void load(true)}
           refreshing={isRefreshing}
           renderItem={({ item }) => <TimelineCard accessToken={session?.accessToken} entry={item} comments={comments[item.publicationId] ?? []} draft={drafts[item.publicationId] ?? ''} isCommentsOpen={openComments[item.publicationId] === true} onChangeDraft={value => setDrafts(current => ({ ...current, [item.publicationId]: value }))} onAddComment={() => void addComment(item)} onToggleComments={() => void toggleComments(item)} onToggleReaction={() => void toggleReaction(item)} />}

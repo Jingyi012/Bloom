@@ -11,6 +11,7 @@ import { Fraunces_600SemiBold, Fraunces_700Bold } from '@expo-google-fonts/fraun
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '@/styles/tokens';
 import { AuthProvider } from '@/auth/AuthProvider';
+import { SettingsProvider } from '@/settings/SettingsProvider';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -28,12 +29,14 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="(tabs)" />
-        </Stack>
-      </AuthProvider>
+      <SettingsProvider>
+        <AuthProvider>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(tabs)" />
+          </Stack>
+        </AuthProvider>
+      </SettingsProvider>
     </SafeAreaProvider>
   );
 }

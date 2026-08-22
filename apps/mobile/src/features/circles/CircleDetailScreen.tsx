@@ -48,7 +48,7 @@ export default function CircleDetailScreen() {
 
   const leave = useCallback(() => {
     if (!session?.accessToken || !circleId) return;
-    Alert.alert('Leave this circle?', 'Your sealed pages stay private and will not be revealed to the remaining members.', [
+    Alert.alert('Leave this circle?', 'Your sealed diary entries stay private and will not be revealed to the remaining members.', [
       { text: 'Keep circle', style: 'cancel' },
       { text: 'Leave circle', style: 'destructive', onPress: () => void (async () => { setIsBusy(true); try { await bloomApi.leaveCircle(session.accessToken, circleId); router.back(); } catch (leaveError) { setError(leaveError instanceof Error ? leaveError.message : 'Could not leave the circle.'); } finally { setIsBusy(false); } })() },
     ]);

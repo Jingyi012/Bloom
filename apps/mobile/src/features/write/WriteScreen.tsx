@@ -10,12 +10,14 @@ import type { CircleSummary } from '@/types/api';
 import { colors } from '@/styles/tokens';
 import { writeStyles as styles } from '@/styles/screens/write.styles';
 import { clearWriteDraft, draftKey, readWriteDraft, saveWriteDraft } from '@/features/write/draftStorage';
+import { useSettings } from '@/settings/SettingsProvider';
+import { getDeviceTimeZone } from '@/utils/device';
 
 const MOODS = [
-  { key: 'joyful', label: 'Joyful', icon: 'emoticon-excited-outline', color: colors.butter },
-  { key: 'calm', label: 'Calm', icon: 'weather-sunny', color: colors.sage },
-  { key: 'heavy', label: 'Heavy', icon: 'weather-cloudy', color: colors.lavender },
-  { key: 'restless', label: 'Restless', icon: 'weather-windy', color: colors.coral },
+  { key: 'joyful', icon: 'emoticon-excited-outline', color: colors.butter },
+  { key: 'calm', icon: 'weather-sunny', color: colors.sage },
+  { key: 'heavy', icon: 'weather-cloudy', color: colors.lavender },
+  { key: 'restless', icon: 'weather-windy', color: colors.coral },
 ] as const;
 const PROMPTS = [
   { key: 'small_joy', text: 'What small thing made today feel lighter?' },
@@ -36,6 +38,7 @@ function getLocalDate() {
 
 export default function WriteScreen() {
   const { session, user } = useAuth();
+  const { t } = useSettings();
   const [circles, setCircles] = useState<CircleSummary[]>([]);
   const [selectedCircleIds, setSelectedCircleIds] = useState<string[]>([]);
   const [text, setText] = useState('');
@@ -81,7 +84,7 @@ export default function WriteScreen() {
         setPromptKey(draft.promptKey);
         setSelectedCircleIds(draft.selectedCircleIds);
         setImageUri(draft.imageUri ?? null);
-        if (draft.text || draft.imageUri) setNotice('Your unfinished page was restored on this device.');
+      if (draft.text || draft.imageUri) setNotice('Your unfinished diary was restored on this device.');
       }
       setIsDraftReady(true);
     });
@@ -113,7 +116,7 @@ export default function WriteScreen() {
   const submit = useCallback(async () => {
     if (!session?.accessToken) return;
     if (!text.trim()) {
-      setError('Write a few words before sealing today’s page.');
+      setError('Write a few words before sealing today’s diary.');
       return;
     }
     if (selectedCircleIds.length === 0) {
@@ -128,7 +131,7 @@ export default function WriteScreen() {
       const submission = {
         clientEntryId: draftClientEntryId ?? createClientEntryId(),
         authorLocalDate: localDate,
-        authorTimeZoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        authorTimeZoneId: getDeviceTimeZone(),
         text: text.trim(),
         mood,
         promptKey,
@@ -146,9 +149,9 @@ export default function WriteScreen() {
         skipNextDraftSave.current = true;
         await clearWriteDraft(currentDraftKey);
       }
-      setNotice('Sealed. You can read this page again when your circles bloom.');
+      setNotice('Sealed. You can read this diary entry again when your circles bloom.');
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Could not seal today’s page.');
+      setError(submitError instanceof Error ? submitError.message : 'Could not seal today’s diary.');
     } finally {
       setIsSubmitting(false);
     }
@@ -160,15 +163,15 @@ export default function WriteScreen() {
       setError('Allow photo access to attach an image.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: true, aspect: [4, 3] });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85, allowsEditing: true, allowsMultipleSelection: false, selectionLimit: 1, aspect: [4, 3] });
     if (!result.canceled) setImageUri(result.assets[0]?.uri ?? null);
   }, []);
 
   return (
     <Screen>
-      <Text style={styles.eyebrow}>TODAY’S PAGE</Text>
-      <Text style={styles.title}>Write honestly.</Text>
-      <Text style={styles.subtitle}>This page stays private until the circles you choose bloom.</Text>
+      <Text style={styles.eyebrow}>{t('todaysDiary')}</Text>
+      <Text style={styles.title}>{t('writeHonestly')}</Text>
+      <Text style={styles.subtitle}>{t('diaryPrivate')}</Text>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
@@ -178,7 +181,7 @@ export default function WriteScreen() {
         multiline
         maxLength={5000}
         onChangeText={setText}
-        placeholder="What is alive for you today?"
+        placeholder={t('diaryPlaceholder')}
         placeholderTextColor={colors.inkSoft}
         style={styles.editor}
         textAlignVertical="top"
@@ -187,15 +190,15 @@ export default function WriteScreen() {
       <Text style={styles.counter}>{text.length}/5000</Text>
 
       <Pressable accessibilityRole="button" accessibilityLabel="Attach one photo" onPress={() => void pickImage()} style={styles.photoButton}>
-        <Text style={styles.photoButtonText}>{imageUri ? 'Replace photo' : 'Attach one photo (optional)'}</Text>
+        <Text style={styles.photoButtonText}>{imageUri ? t('replacePhoto') : t('attachPhoto')}</Text>
       </Pressable>
       {imageUri ? <Image accessibilityLabel="Selected diary photo" contentFit="cover" source={imageUri} style={styles.photoPreview} /> : null}
 
-      <Text style={styles.section}>Mood (optional)</Text>
+      <Text style={styles.section}>{t('mood')}</Text>
       <View style={styles.chipRow}>
         {MOODS.map(option => (
           <Pressable
-            accessibilityLabel={`Mood ${option.label}`}
+            accessibilityLabel={`Mood ${t(option.key)}`}
             accessibilityRole="button"
             accessibilityState={{ selected: mood === option.key }}
             key={option.key}
@@ -205,12 +208,12 @@ export default function WriteScreen() {
             <View style={[styles.moodIcon, { backgroundColor: `${option.color}22` }]}>
               <MaterialCommunityIcons color={option.color} name={option.icon} size={24} />
             </View>
-            <Text style={[styles.moodLabel, mood === option.key ? styles.moodLabelSelected : null]}>{option.label}</Text>
+            <Text style={[styles.moodLabel, mood === option.key ? styles.moodLabelSelected : null]}>{t(option.key)}</Text>
           </Pressable>
         ))}
       </View>
 
-      <Text style={styles.section}>A gentle prompt (optional)</Text>
+      <Text style={styles.section}>{t('prompt')}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Choose writing prompt" onPress={() => {
         const currentIndex = PROMPTS.findIndex(prompt => prompt.key === promptKey);
         const nextPrompt = PROMPTS[(currentIndex + 1) % PROMPTS.length] ?? PROMPTS[0]!;
@@ -220,7 +223,7 @@ export default function WriteScreen() {
         <Text style={styles.promptAction}>{promptKey ? 'Change prompt' : 'Choose prompt'}</Text>
       </Pressable>
 
-      <Text style={styles.section}>Seal to circles</Text>
+      <Text style={styles.section}>{t('sealTo')}</Text>
       {isLoading ? <ActivityIndicator color={colors.coralDark} /> : null}
       {!isLoading && circles.length === 0 ? <Text style={styles.empty}>Create a sealed circle before writing.</Text> : null}
       {circles.map(circle => {
@@ -251,7 +254,7 @@ export default function WriteScreen() {
         onPress={() => void submit()}
         style={({ pressed }) => [styles.submit, pressed ? styles.submitPressed : null, isSubmitting ? styles.submitDisabled : null]}
       >
-        {isSubmitting ? <ActivityIndicator color={colors.card} /> : <Text style={styles.submitText}>Seal page{selectedCount > 0 ? ` to ${selectedCount} circle${selectedCount === 1 ? '' : 's'}` : ''}</Text>}
+        {isSubmitting ? <ActivityIndicator color={colors.card} /> : <Text style={styles.submitText}>{t('sealDiary')}{selectedCount > 0 ? ` · ${selectedCount}` : ''}</Text>}
       </Pressable>
     </Screen>
   );

@@ -31,7 +31,7 @@ public sealed class EfGoogleUserService(
             return user;
         }
 
-        user = User.CreateFromGoogle(identity.Subject, identity.Email, identity.EmailVerified, identity.DisplayName, identity.AvatarUrl, "UTC");
+        user = User.CreateFromGoogle(identity.Subject, identity.Email, identity.EmailVerified, identity.DisplayName, identity.AvatarUrl, "Asia/Kuala_Lumpur");
         _auditStampWriter.StampCreated(user, null);
         _db.Users.Add(user);
         try

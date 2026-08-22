@@ -30,7 +30,7 @@ public sealed class User : AuditableEntity
     public string? GoogleAvatarUrl { get; private set; }
 
     /// <summary>Gets the user's IANA time-zone identifier.</summary>
-    public string TimeZoneId { get; private set; } = "UTC";
+    public string TimeZoneId { get; private set; } = "Asia/Kuala_Lumpur";
 
     /// <summary>Creates a local user from a validated Google identity.</summary>
     /// <param name="googleSubject">The immutable Google subject claim.</param>

@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Switch, Text, TextInput, View } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/auth/AuthProvider';
 import { bloomApi } from '@/api/client';
 import type { UserStatsResponse } from '@/types/api';
 import { colors } from '@/styles/tokens';
 import { profileStyles as styles } from '@/styles/screens/profile.styles';
+import { useSettings } from '@/settings/SettingsProvider';
+import { getDeviceTimeZone } from '@/utils/device';
 
 export default function ProfileScreen() {
   const { session, user, signOut } = useAuth();
+  const { language, remindersEnabled, reminderTime, setLanguage, setRemindersEnabled, setReminderTime, t } = useSettings();
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
-  const [timeZoneId, setTimeZoneId] = useState(user?.timeZoneId ?? 'UTC');
   const [stats, setStats] = useState<UserStatsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -25,43 +27,55 @@ export default function ProfileScreen() {
   }, [session?.accessToken]);
 
   useEffect(() => { void loadStats(); }, [loadStats]);
-  useEffect(() => { setDisplayName(user?.displayName ?? ''); setTimeZoneId(user?.timeZoneId ?? 'UTC'); }, [user?.displayName, user?.timeZoneId]);
+  useEffect(() => { setDisplayName(user?.displayName ?? ''); }, [user?.displayName]);
 
   const save = useCallback(async () => {
     if (!session?.accessToken) return;
     setIsSaving(true); setError(null); setNotice(null);
-    try { await bloomApi.updateProfile(session.accessToken, displayName.trim(), timeZoneId.trim()); setNotice('Profile saved.'); }
+    try { await bloomApi.updateProfile(session.accessToken, displayName.trim(), getDeviceTimeZone()); setNotice(t('profileSaved')); }
     catch (saveError) { setError(saveError instanceof Error ? saveError.message : 'Could not save your profile.'); }
     finally { setIsSaving(false); }
-  }, [displayName, session?.accessToken, timeZoneId]);
+  }, [displayName, session?.accessToken, t]);
 
   const deleteAccount = useCallback(() => {
     if (!session?.accessToken) return;
-    Alert.alert('Delete your Bloom account?', 'Your account will be deactivated and your active sessions revoked.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete account', style: 'destructive', onPress: () => void (async () => { await bloomApi.deleteAccount(session.accessToken); await signOut(); })() },
+    Alert.alert(t('deleteAccount'), language === 'zh' ? '你的帐号将被停用，现有登录会话也会失效。' : 'Your account will be deactivated and your active sessions revoked.', [
+      { text: language === 'zh' ? '取消' : 'Cancel', style: 'cancel' },
+      { text: t('deleteAccount'), style: 'destructive', onPress: () => void (async () => { await bloomApi.deleteAccount(session.accessToken); await signOut(); })() },
     ]);
-  }, [session?.accessToken, signOut]);
+  }, [language, session?.accessToken, signOut, t]);
 
   return <Screen>
-    <Text style={styles.eyebrow}>YOUR PROFILE</Text>
-    <Text style={styles.title}>A quiet place for you.</Text>
-    <Text style={styles.body}>Your Google account is the only way into Bloom. We never show sealed writing here.</Text>
+    <Text style={styles.eyebrow}>{t('yourProfile')}</Text>
+    <Text style={styles.title}>{t('quietPlace')}</Text>
+    <Text style={styles.body}>{t('profileBody')}</Text>
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     {notice ? <Text style={styles.notice}>{notice}</Text> : null}
     <View style={styles.card}>
-      <Text style={styles.label}>Display name</Text>
-      <TextInput accessibilityLabel="Display name" onChangeText={setDisplayName} style={styles.input} value={displayName} />
-      <Text style={styles.labelSpaced}>IANA time zone</Text>
-      <TextInput accessibilityLabel="Time zone" autoCapitalize="none" onChangeText={setTimeZoneId} style={styles.input} value={timeZoneId} />
-      <Pressable accessibilityRole="button" disabled={isSaving} onPress={() => void save()} style={styles.save}>{isSaving ? <ActivityIndicator color={colors.card} /> : <Text style={styles.saveText}>Save profile</Text>}</Pressable>
+      <Text style={styles.label}>{t('displayName')}</Text>
+      <TextInput accessibilityLabel={t('displayName')} onChangeText={setDisplayName} style={styles.input} value={displayName} />
+      <Text style={styles.labelSpaced}>{t('timezone')}</Text>
+      <View style={styles.readOnlyInput}><Text style={styles.readOnlyText}>{getDeviceTimeZone()}</Text></View>
+      <Text style={styles.hint}>{t('timezoneHint')}</Text>
+      <Pressable accessibilityRole="button" disabled={isSaving} onPress={() => void save()} style={styles.save}>{isSaving ? <ActivityIndicator color={colors.card} /> : <Text style={styles.saveText}>{t('saveProfile')}</Text>}</Pressable>
     </View>
     {isLoading ? <ActivityIndicator color={colors.coralDark} /> : <View style={styles.statsRow}>
-      <Stat value={stats?.totalEntries ?? 0} label="Pages sealed" />
-      <Stat value={stats?.activeCircles ?? 0} label="Active circles" />
-      <Stat value={stats?.bloomedCircles ?? 0} label="Bloomed" />
+      <Stat value={stats?.totalEntries ?? 0} label={t('pagesSealed')} />
+      <Stat value={stats?.activeCircles ?? 0} label={t('activeCircles')} />
+      <Stat value={stats?.bloomedCircles ?? 0} label={t('bloomed')} />
     </View>}
-    <Pressable accessibilityRole="button" onPress={deleteAccount} style={styles.danger}><Text style={styles.dangerText}>Delete account</Text></Pressable>
+    <View style={styles.settingsCard}>
+      <Text style={styles.settingsTitle}>{t('settings')}</Text>
+      <Text style={styles.label}>{t('language')}</Text>
+      <View style={styles.optionRow}>
+        <Pressable accessibilityRole="button" accessibilityState={{ selected: language === 'en' }} onPress={() => setLanguage('en')} style={[styles.option, language === 'en' ? styles.optionSelected : null]}><Text style={[styles.optionText, language === 'en' ? styles.optionTextSelected : null]}>{t('english')}</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityState={{ selected: language === 'zh' }} onPress={() => setLanguage('zh')} style={[styles.option, language === 'zh' ? styles.optionSelected : null]}><Text style={[styles.optionText, language === 'zh' ? styles.optionTextSelected : null]}>{t('chinese')}</Text></Pressable>
+      </View>
+      <View style={styles.settingRow}><View style={styles.settingCopy}><Text style={styles.settingTitle}>{t('reminder')}</Text><Text style={styles.hint}>{t('reminderHint')}</Text></View><Switch accessibilityLabel={t('reminder')} onValueChange={setRemindersEnabled} thumbColor={colors.card} trackColor={{ false: colors.line, true: colors.sage }} value={remindersEnabled} /></View>
+      <Text style={styles.labelSpaced}>{t('reminderTime')}</Text>
+      <TextInput accessibilityLabel={t('reminderTime')} autoCapitalize="none" keyboardType="numbers-and-punctuation" maxLength={5} onChangeText={setReminderTime} placeholder="20:00" style={styles.input} value={reminderTime} />
+    </View>
+    <Pressable accessibilityRole="button" onPress={deleteAccount} style={styles.danger}><Text style={styles.dangerText}>{t('deleteAccount')}</Text></Pressable>
   </Screen>;
 }
 

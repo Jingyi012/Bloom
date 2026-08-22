@@ -7,6 +7,7 @@ import { bloomApi } from '@/api/client';
 import { clearSession, readSession, writeSession } from '@/auth/session';
 import type { CurrentUserResponse } from '@/types/api';
 import type { StoredSession } from '@/types/session';
+import { getDeviceTimeZone } from '@/utils/device';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -67,7 +68,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         const platform = Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : 'web';
         const result = await bloomApi.signInWithGoogle(idToken, { platform, nonce: request?.nonce });
         const nextSession = { accessToken: result.accessToken, refreshToken: result.refreshToken };
-        const nextUser = await bloomApi.me(result.accessToken);
+        const nextUser = await syncDeviceTimeZone(result.accessToken, await bloomApi.me(result.accessToken));
         await writeSession(nextSession);
         if (!cancelled) {
           setSession(nextSession);
@@ -115,17 +116,27 @@ async function restoreSession(): Promise<{ session: StoredSession; user: Current
   const stored = await readSession();
   if (!stored) return null;
   try {
-    return { session: stored, user: await bloomApi.me(stored.accessToken) };
+    return { session: stored, user: await syncDeviceTimeZone(stored.accessToken, await bloomApi.me(stored.accessToken)) };
   } catch {
     try {
       const refreshed = await bloomApi.refresh(stored.refreshToken);
       const nextSession = { accessToken: refreshed.accessToken, refreshToken: refreshed.refreshToken };
       await writeSession(nextSession);
-      return { session: nextSession, user: await bloomApi.me(nextSession.accessToken) };
+      return { session: nextSession, user: await syncDeviceTimeZone(nextSession.accessToken, await bloomApi.me(nextSession.accessToken)) };
     } catch {
       await clearSession();
       return null;
     }
+  }
+}
+
+async function syncDeviceTimeZone(accessToken: string, user: CurrentUserResponse): Promise<CurrentUserResponse> {
+  const deviceTimeZone = getDeviceTimeZone();
+  if (user.timeZoneId === deviceTimeZone) return user;
+  try {
+    return await bloomApi.updateProfile(accessToken, user.displayName, deviceTimeZone);
+  } catch {
+    return user;
   }
 }
 
