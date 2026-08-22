@@ -1,7 +1,7 @@
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, { type DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
 import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/auth/AuthProvider';
@@ -32,6 +32,7 @@ export default function CirclesScreen() {
   const router = useRouter();
   const { session } = useAuth();
   const { t } = useSettings();
+  const deviceTimeZone = useMemo(() => getDeviceTimeZone(), []);
   const [circles, setCircles] = useState<CircleSummary[]>([]);
   const [invitations, setInvitations] = useState<CircleInvitation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -76,7 +77,7 @@ export default function CirclesScreen() {
         name: name.trim(),
         emoji: '🌱',
         bloomAtUtc: bloomAt.toISOString(),
-        timeZoneId: getDeviceTimeZone(),
+        timeZoneId: deviceTimeZone,
       });
       setName('');
       setBloomAt(getDefaultBloomDate());
@@ -87,12 +88,14 @@ export default function CirclesScreen() {
     } finally {
       setIsCreating(false);
     }
-  }, [bloomAt, load, name, session?.accessToken]);
+  }, [bloomAt, deviceTimeZone, load, name, session?.accessToken]);
 
-  const handleBloomPickerChange = useCallback((event: DateTimePickerEvent, selected?: Date) => {
+  const handleBloomPickerValueChange = useCallback((_event: DateTimePickerChangeEvent, selected: Date) => {
+    setBloomAt(selected);
     if (Platform.OS === 'android') setPickerMode(null);
-    if (selected) setBloomAt(selected);
   }, []);
+
+  const dismissBloomPicker = useCallback(() => setPickerMode(null), []);
 
   const respond = useCallback(async (invitationId: string, accept: boolean) => {
     if (!session?.accessToken) return;
@@ -145,10 +148,12 @@ export default function CirclesScreen() {
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               minimumDate={pickerMode === 'date' ? new Date() : undefined}
               mode={pickerMode}
-              onChange={handleBloomPickerChange}
+              onDismiss={dismissBloomPicker}
+              onValueChange={handleBloomPickerValueChange}
+              timeZoneName={deviceTimeZone}
               value={bloomAt}
             />
-            {Platform.OS === 'ios' ? <Pressable accessibilityRole="button" onPress={() => setPickerMode(null)} style={styles.pickerDone}><Text style={styles.pickerDoneText}>{t('done')}</Text></Pressable> : null}
+            {Platform.OS === 'ios' ? <Pressable accessibilityRole="button" onPress={dismissBloomPicker} style={styles.pickerDone}><Text style={styles.pickerDoneText}>{t('done')}</Text></Pressable> : null}
           </View> : null}
           <Pressable accessibilityRole="button" disabled={isCreating} style={styles.primaryButton} onPress={() => void create()}>
             {isCreating ? <ActivityIndicator color={colors.card} /> : <Text style={styles.primaryButtonText}>{t('plantCircle')}</Text>}
@@ -178,7 +183,7 @@ export default function CirclesScreen() {
       {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
       <Text style={styles.sectionTitle}>{t('activeCirclesTitle')}</Text>
     </View>
-  ), [bloomAt, create, error, handleBloomPickerChange, invitations, isCreating, name, pickerMode, respond, showCreateForm, t]);
+  ), [bloomAt, create, deviceTimeZone, dismissBloomPicker, error, handleBloomPickerValueChange, invitations, isCreating, name, pickerMode, respond, showCreateForm, t]);
 
   return (
     <Screen scroll={false}>
