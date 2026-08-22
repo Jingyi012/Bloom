@@ -9,8 +9,6 @@ export const profileStyles = StyleSheet.create({
   label: { color: colors.inkSoft, fontFamily: typography.uiBold, fontSize: 11, letterSpacing: 1, marginBottom: 8, textTransform: 'uppercase' },
   labelSpaced: { color: colors.inkSoft, fontFamily: typography.uiBold, fontSize: 11, letterSpacing: 1, marginBottom: 8, marginTop: 14, textTransform: 'uppercase' },
   input: { borderColor: colors.line, borderRadius: 12, borderWidth: 1, color: colors.ink, fontSize: 15, paddingHorizontal: 12, paddingVertical: 11 },
-  readOnlyInput: { backgroundColor: colors.background, borderColor: colors.line, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 11 },
-  readOnlyText: { color: colors.inkSoft, fontSize: 15 },
   hint: { color: colors.inkSoft, fontSize: 11, lineHeight: 16, marginTop: 5 },
   save: { alignItems: 'center', backgroundColor: colors.coral, borderRadius: 13, marginTop: 14, minHeight: 46, justifyContent: 'center' },
   saveText: { color: colors.card, fontSize: 14, fontWeight: '800' },

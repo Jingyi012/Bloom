@@ -54,9 +54,6 @@ export default function ProfileScreen() {
     <View style={styles.card}>
       <Text style={styles.label}>{t('displayName')}</Text>
       <TextInput accessibilityLabel={t('displayName')} onChangeText={setDisplayName} style={styles.input} value={displayName} />
-      <Text style={styles.labelSpaced}>{t('timezone')}</Text>
-      <View style={styles.readOnlyInput}><Text style={styles.readOnlyText}>{getDeviceTimeZone()}</Text></View>
-      <Text style={styles.hint}>{t('timezoneHint')}</Text>
       <Pressable accessibilityRole="button" disabled={isSaving} onPress={() => void save()} style={styles.save}>{isSaving ? <ActivityIndicator color={colors.card} /> : <Text style={styles.saveText}>{t('saveProfile')}</Text>}</Pressable>
     </View>
     {isLoading ? <ActivityIndicator color={colors.coralDark} /> : <View style={styles.statsRow}>
