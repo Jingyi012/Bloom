@@ -134,7 +134,7 @@ export default function EntryDetailScreen() {
             <InlineAlert message={t('entryLoadFailed')} onDismiss={() => setError(null)} />
           ) : (
             <View>
-              <View style={styles.card}>
+              <View style={[styles.card, showReactionPicker ? styles.cardOpen : null]}>
                 <View style={styles.authorRow}>
                   <Avatar uri={entry.authorAvatarUrl} style={styles.avatar} imageStyle={styles.avatarImage} />
                   <View style={styles.authorCopy}>

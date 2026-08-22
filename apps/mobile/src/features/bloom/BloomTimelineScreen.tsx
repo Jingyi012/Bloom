@@ -193,7 +193,7 @@ const TimelineCard = memo(function TimelineCard({
   const selectedReaction = REACTION_OPTIONS.find((option) => option.code === currentUserReaction?.emojiCode) ?? REACTION_OPTIONS[0];
   const initial = entry.authorDisplayName.trim().charAt(0).toUpperCase() || "?";
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, showReactionPicker ? styles.cardOpen : null]}>
       <Pressable
         accessibilityHint={t("openDiaryEntry")}
         accessibilityRole="button"

@@ -44,6 +44,7 @@ export const entryDetailStyles = StyleSheet.create({
     padding: spacing.lg,
     position: "relative",
   },
+  cardOpen: { elevation: 10, zIndex: 10 },
   authorRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   avatar: {
     alignItems: "center",
@@ -101,6 +102,7 @@ export const entryDetailStyles = StyleSheet.create({
     paddingVertical: spacing.xs,
     zIndex: 20,
     ...shadows.card,
+    elevation: 12,
   },
   reactionOption: {
     alignItems: "center",
