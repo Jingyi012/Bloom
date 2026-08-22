@@ -61,9 +61,17 @@ public sealed class AuthController(
             return Unauthorized();
         }
 
-        var user = await _googleUserService.FindOrProvisionAsync(
-            new Bloom.Domain.Identity.GoogleIdentity(subject, email, verified, displayName, avatarUrl),
-            cancellationToken).ConfigureAwait(false);
+        Bloom.Domain.Identity.User user;
+        try
+        {
+            user = await _googleUserService.FindOrProvisionAsync(
+                new Bloom.Domain.Identity.GoogleIdentity(subject, email, verified, displayName, avatarUrl),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException exception) when (exception.Message == "account_deleted")
+        {
+            return Unauthorized();
+        }
         var tokens = await _sessionTokenService.CreateAsync(user, cancellationToken).ConfigureAwait(false);
 
         return Ok(new GoogleSignInResponse(user.Id, user.DisplayName, user.Email, tokens.AccessToken, tokens.RefreshToken, tokens.AccessTokenExpiresAtUtc));

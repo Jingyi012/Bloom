@@ -21,6 +21,8 @@ public sealed class EfGoogleUserService(
     {
         ArgumentNullException.ThrowIfNull(identity);
         var user = await _db.Users.SingleOrDefaultAsync(candidate => candidate.GoogleSubject == identity.Subject, cancellationToken).ConfigureAwait(false);
+        if (user is not null && user.DeletedAtUtc is not null)
+            throw new InvalidOperationException("account_deleted");
         if (user is not null)
         {
             user.UpdateProfile(identity.DisplayName, user.TimeZoneId);
@@ -46,14 +48,14 @@ public sealed class EfGoogleUserService(
 
     /// <inheritdoc />
     public Task<User?> FindByIdAsync(Guid userId, CancellationToken cancellationToken) =>
-        _db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.Id == userId, cancellationToken);
+        _db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.Id == userId && user.DeletedAtUtc == null, cancellationToken);
 
     /// <inheritdoc />
     public Task<User?> FindByEmailAsync(string email, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(email);
         var normalized = email.Trim().ToUpperInvariant();
-        return _db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.EmailNormalized == normalized, cancellationToken);
+        return _db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.EmailNormalized == normalized && user.DeletedAtUtc == null, cancellationToken);
     }
 
     /// <inheritdoc />
