@@ -69,8 +69,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
         const platform = Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : 'web';
         const result = await bloomApi.signInWithGoogle(idToken, { platform, nonce: request?.nonce });
         const nextSession = { accessToken: result.accessToken, refreshToken: result.refreshToken };
-        const nextUser = await syncDeviceTimeZone(result.accessToken, await bloomApi.me(result.accessToken));
         await writeSession(nextSession);
+        const nextUser = await syncDeviceTimeZone(result.accessToken, await bloomApi.me(result.accessToken));
         if (!cancelled) {
           setSession(nextSession);
           setUser(nextUser);
