@@ -36,7 +36,7 @@ export default function ProfileScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<"profile" | "settings" | null>(null);
+  const [sheet, setSheet] = useState<"profile" | "language" | "reminder" | null>(null);
 
   const loadStats = useCallback(async () => {
     if (!session?.accessToken) return;
@@ -162,24 +162,23 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setSheet("settings")}
-          style={styles.settingRow}
-        >
+        <Pressable accessibilityRole="button" onPress={() => setSheet("language")} style={styles.settingRow}>
           <View style={styles.settingIcon}>
-            <MaterialCommunityIcons
-              color={colors.sageDark}
-              name="tune-variant"
-              size={20}
-            />
+            <MaterialCommunityIcons color={colors.sageDark} name="translate" size={20} />
           </View>
           <View style={styles.settingCopy}>
-            <Text style={styles.settingTitle}>{t("settings")}</Text>
-            <Text style={styles.hint}>
-              {language === "zh" ? t("chinese") : t("english")} ·{" "}
-              {remindersEnabled ? t("on") : t("off")}
-            </Text>
+            <Text style={styles.settingTitle}>{t("language")}</Text>
+            <Text style={styles.hint}>{language === "zh" ? t("chinese") : t("english")}</Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={() => setSheet("reminder")} style={styles.settingRow}>
+          <View style={styles.settingIcon}>
+            <MaterialCommunityIcons color={colors.coralDark} name="bell-outline" size={20} />
+          </View>
+          <View style={styles.settingCopy}>
+            <Text style={styles.settingTitle}>{t("reminder")}</Text>
+            <Text style={styles.hint}>{remindersEnabled ? `${t("on")} · ${reminderTime}` : t("off")}</Text>
           </View>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
@@ -210,7 +209,7 @@ export default function ProfileScreen() {
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>
-                {sheet === "profile" ? t("editProfile") : t("settings")}
+                {sheet === "profile" ? t("editProfile") : sheet === "language" ? t("language") : t("reminder")}
               </Text>
               <Pressable
                 accessibilityRole="button"
@@ -243,7 +242,7 @@ export default function ProfileScreen() {
                   )}
                 </Pressable>
               </>
-            ) : (
+            ) : sheet === "language" ? (
               <>
                 <Text style={styles.label}>{t("chooseLanguage")}</Text>
                 <View style={styles.optionRow}>
@@ -284,6 +283,12 @@ export default function ProfileScreen() {
                     </Text>
                   </Pressable>
                 </View>
+                <Pressable accessibilityRole="button" onPress={() => setSheet(null)} style={styles.save}>
+                  <Text style={styles.saveText}>{t("done")}</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
                 <View style={styles.settingRow}>
                   <View style={styles.settingCopy}>
                     <Text style={styles.settingTitle}>{t("reminder")}</Text>
