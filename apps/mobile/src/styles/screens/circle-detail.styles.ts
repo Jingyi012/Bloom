@@ -2,7 +2,8 @@ import { StyleSheet } from 'react-native';
 import { colors, shadows, spacing, typography } from '@/styles/tokens';
 
 export const circleDetailStyles = StyleSheet.create({
-  back: { color: colors.coralDark, fontSize: 13, fontWeight: '800', marginBottom: spacing.lg },
+  topBar: { alignItems: 'center', flexDirection: 'row', marginBottom: spacing.lg },
+  backButton: { alignItems: 'center', backgroundColor: colors.card, borderColor: colors.line, borderRadius: 18, borderWidth: 1, height: 36, justifyContent: 'center', width: 36 },
   hero: { ...shadows.card, alignItems: 'center', backgroundColor: colors.cardWarm, borderRadius: 24, padding: spacing.xl },
   emoji: { fontSize: 46 },
   title: { color: colors.ink, fontFamily: typography.display, fontSize: 26, marginTop: spacing.sm, textAlign: 'center' },

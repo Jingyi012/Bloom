@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import {
   ActivityIndicator,
   Alert,
@@ -128,9 +129,17 @@ export default function CircleDetailScreen() {
   if (!detail)
     return (
       <Screen onRefresh={() => void load(true)} refreshing={isRefreshing}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()}>
-          <Text style={styles.back}>{t("back")}</Text>
-        </Pressable>
+        <View style={styles.topBar}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("backToCircles")}
+            hitSlop={8}
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <MaterialCommunityIcons color={colors.ink} name="arrow-left" size={19} />
+          </Pressable>
+        </View>
         <InlineAlert
           message={error ?? t("circleNotFound")}
           onDismiss={() => setError(null)}
@@ -141,13 +150,17 @@ export default function CircleDetailScreen() {
   const { circle, members } = detail;
   return (
     <Screen onRefresh={() => void load(true)} refreshing={isRefreshing}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t("backToCircles")}
-        onPress={() => router.back()}
-      >
-        <Text style={styles.back}>‹ {t("backToCircles")}</Text>
-      </Pressable>
+      <View style={styles.topBar}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("backToCircles")}
+          hitSlop={8}
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
+          <MaterialCommunityIcons color={colors.ink} name="arrow-left" size={19} />
+        </Pressable>
+      </View>
       <View style={styles.hero}>
         <Text style={styles.emoji}>{circle.emoji}</Text>
         <Text style={styles.title}>{circle.name}</Text>

@@ -21,7 +21,7 @@ import { getDeviceTimeZone } from "@/utils/device";
 import { InlineAlert } from "@/components/InlineAlert";
 
 export default function ProfileScreen() {
-  const { session, user, signOut } = useAuth();
+  const { session, updateUser, user, signOut } = useAuth();
   const {
     language,
     remindersEnabled,
@@ -71,11 +71,13 @@ export default function ProfileScreen() {
     setError(null);
     setNotice(null);
     try {
-      await bloomApi.updateProfile(
+      const updatedUser = await bloomApi.updateProfile(
         session.accessToken,
         displayName.trim(),
         getDeviceTimeZone(),
       );
+      updateUser(updatedUser);
+      setDisplayName(updatedUser.displayName);
       setNotice(t("profileSaved"));
       setSheet(null);
     } catch (saveError) {
@@ -87,7 +89,7 @@ export default function ProfileScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [displayName, session?.accessToken, t]);
+  }, [displayName, session?.accessToken, t, updateUser]);
 
   const deleteAccount = useCallback(() => {
     if (!session?.accessToken) return;
