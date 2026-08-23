@@ -131,7 +131,6 @@ export default function ProfileScreen() {
           <Text style={styles.editButtonText}>{t("editProfile")}</Text>
         </Pressable>
       </View>
-      <Text style={styles.body}>{t("profileBody")}</Text>
       {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
       {notice ? <InlineAlert message={notice} onDismiss={() => setNotice(null)} variant="success" /> : null}
       {isLoading ? (

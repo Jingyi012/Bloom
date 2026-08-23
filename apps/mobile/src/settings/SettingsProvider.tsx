@@ -24,8 +24,6 @@ const translations = {
     hi: "Hi",
     yourProfile: "YOUR PROFILE",
     quietPlace: "A quiet place for you.",
-    profileBody:
-      "Your Google account is the only way into Bloom. We never show sealed writing here.",
     displayName: "Display name",
     timezone: "Device time zone",
     timezoneHint: "Follows your phone automatically",
@@ -222,8 +220,6 @@ const translations = {
     hi: "你好",
     yourProfile: "我的资料",
     quietPlace: "给自己留一处安静的地方。",
-    profileBody:
-      "Bloom 使用 Google 帐号登录，已封存的日记只有在开放日才能看见。",
     displayName: "显示名称",
     timezone: "设备时区",
     timezoneHint: "跟随手机自动更新",
