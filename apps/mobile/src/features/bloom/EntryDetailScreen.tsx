@@ -4,6 +4,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, RefreshCo
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Screen } from '@/components/Screen';
+import { Avatar } from '@/components/Avatar';
 import { InlineAlert } from '@/components/InlineAlert';
 import { useAuth } from '@/auth/AuthProvider';
 import { bloomApi } from '@/api/client';
@@ -137,7 +138,14 @@ export default function EntryDetailScreen() {
             <View>
               <View style={[styles.card, showReactionPicker ? styles.cardOpen : null]}>
                 <View style={styles.authorRow}>
-                  <Avatar uri={entry.authorAvatarUrl} style={styles.avatar} imageStyle={styles.avatarImage} />
+                  <Avatar
+                    accessibilityLabel={entry.authorDisplayName}
+                    containerStyle={styles.avatar}
+                    imageStyle={styles.avatarImage}
+                    initial={entry.authorDisplayName.trim().charAt(0).toUpperCase() || '?'}
+                    textStyle={styles.avatarText}
+                    uri={entry.authorAvatarUrl}
+                  />
                   <View style={styles.authorCopy}>
                     <Text style={styles.author}>{entry.authorDisplayName}</Text>
                     <Text style={styles.when}>
@@ -211,7 +219,14 @@ export default function EntryDetailScreen() {
                 <Text style={styles.sectionLabel}>{t('commentsTitle')} {'\u00B7'} {entry.commentCount}</Text>
                 {comments.length === 0 ? <Text style={styles.noComments}>{t('noComments')}</Text> : comments.map((comment) => (
                   <View key={comment.id} style={styles.comment}>
-                    <Avatar uri={comment.authorAvatarUrl} style={styles.commentAvatar} imageStyle={styles.commentAvatarImage} />
+                    <Avatar
+                      accessibilityLabel={comment.authorDisplayName}
+                      containerStyle={styles.commentAvatar}
+                      imageStyle={styles.commentAvatarImage}
+                      initial={comment.authorDisplayName.trim().charAt(0).toUpperCase() || '?'}
+                      textStyle={styles.commentAvatarText}
+                      uri={comment.authorAvatarUrl}
+                    />
                     <View style={styles.commentBubble}>
                       <View style={styles.commentMeta}>
                         <Text style={styles.commentAuthor}>{comment.authorDisplayName}</Text>
@@ -255,14 +270,6 @@ export default function EntryDetailScreen() {
         ) : null}
       </KeyboardAvoidingView>
     </Screen>
-  );
-}
-
-function Avatar({ uri, style, imageStyle }: { uri: string | null; style: object; imageStyle: object }) {
-  return (
-    <View style={style}>
-      {uri ? <Image contentFit="cover" source={{ uri }} style={imageStyle} /> : <MaterialCommunityIcons color={colors.sageDark} name="account-circle" size={26} />}
-    </View>
   );
 }
 

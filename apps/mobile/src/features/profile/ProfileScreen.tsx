@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import DateTimePicker, {
+  type DateTimePickerChangeEvent,
+} from "@react-native-community/datetimepicker";
 import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   Switch,
   Text,
@@ -18,7 +22,9 @@ import { colors } from "@/styles/tokens";
 import { profileStyles as styles } from "@/styles/screens/profile.styles";
 import { useSettings } from "@/settings/SettingsProvider";
 import { getDeviceTimeZone } from "@/utils/device";
+import { formatLocalTime } from "@/utils/date";
 import { InlineAlert } from "@/components/InlineAlert";
+import { Avatar } from "@/components/Avatar";
 
 export default function ProfileScreen() {
   const { session, updateUser, user, signOut } = useAuth();
@@ -29,8 +35,10 @@ export default function ProfileScreen() {
     setLanguage,
     setRemindersEnabled,
     setReminderTime,
+    reminderStatus,
     t,
   } = useSettings();
+  const deviceTimeZone = useMemo(() => getDeviceTimeZone(), []);
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [stats, setStats] = useState<UserStatsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,6 +47,38 @@ export default function ProfileScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<"profile" | "language" | "reminder" | null>(null);
+  const [showReminderPicker, setShowReminderPicker] = useState(false);
+
+  const reminderDate = useMemo(() => {
+    const [hourPart = "20", minutePart = "0"] = reminderTime.split(":");
+    const hours = Number(hourPart);
+    const minutes = Number(minutePart);
+    const value = new Date();
+    const safeHours = Number.isFinite(hours) ? hours : 20;
+    const safeMinutes = Number.isFinite(minutes) ? minutes : 0;
+    value.setHours(
+      safeHours,
+      safeMinutes,
+      0,
+      0,
+    );
+    return value;
+  }, [reminderTime]);
+
+  const handleReminderPickerValueChange = useCallback(
+    (_event: DateTimePickerChangeEvent, selected?: Date) => {
+      if (!selected) return;
+      const hours = String(selected.getHours()).padStart(2, "0");
+      const minutes = String(selected.getMinutes()).padStart(2, "0");
+      setReminderTime(`${hours}:${minutes}`);
+      if (Platform.OS === "android") setShowReminderPicker(false);
+    },
+    [setReminderTime],
+  );
+
+  useEffect(() => {
+    if (sheet !== "reminder") setShowReminderPicker(false);
+  }, [sheet]);
 
   const loadStats = useCallback(async (refresh = false) => {
     if (!session?.accessToken) return;
@@ -114,11 +154,14 @@ export default function ProfileScreen() {
   return (
     <Screen onRefresh={() => void loadStats(true)} refreshing={isRefreshing}>
       <View style={styles.profileHead}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {(user?.displayName || "?").slice(0, 1).toUpperCase()}
-          </Text>
-        </View>
+        <Avatar
+          accessibilityLabel={user?.displayName ?? t("yourProfile")}
+          containerStyle={styles.avatar}
+          imageStyle={styles.avatarImage}
+          initial={(user?.displayName || "?").slice(0, 1).toUpperCase()}
+          textStyle={styles.avatarText}
+          uri={user?.avatarUrl}
+        />
         <Text style={styles.profileName}>
           {user?.displayName || t("yourProfile")}
         </Text>
@@ -178,7 +221,9 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.settingCopy}>
             <Text style={styles.settingTitle}>{t("reminder")}</Text>
-            <Text style={styles.hint}>{remindersEnabled ? `${t("on")} · ${reminderTime}` : t("off")}</Text>
+            <Text style={styles.hint}>
+              {remindersEnabled ? `${t("on")} · ${formatLocalTime(reminderDate)}` : t("off")}
+            </Text>
           </View>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
@@ -306,16 +351,54 @@ export default function ProfileScreen() {
                   />
                 </View>
                 <Text style={styles.labelSpaced}>{t("reminderTime")}</Text>
-                <TextInput
+                <Pressable
+                  accessibilityRole="button"
                   accessibilityLabel={t("reminderTime")}
-                  autoCapitalize="none"
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={5}
-                  onChangeText={setReminderTime}
-                  placeholder="20:00"
-                  style={styles.input}
-                  value={reminderTime}
-                />
+                  onPress={() => setShowReminderPicker(true)}
+                  style={styles.timePickerButton}
+                >
+                  <MaterialCommunityIcons
+                    color={colors.coralDark}
+                    name="clock-outline"
+                    size={20}
+                  />
+                  <Text style={styles.timePickerValue}>
+                    {formatLocalTime(reminderDate)}
+                  </Text>
+                  <MaterialCommunityIcons
+                    color={colors.inkSoft}
+                    name="chevron-right"
+                    size={22}
+                  />
+                </Pressable>
+                {showReminderPicker ? (
+                  <View style={styles.reminderPickerPanel}>
+                    <DateTimePicker
+                      display={Platform.OS === "ios" ? "spinner" : "default"}
+                      mode="time"
+                      onDismiss={() => setShowReminderPicker(false)}
+                      onValueChange={handleReminderPickerValueChange}
+                      timeZoneName={deviceTimeZone}
+                      value={reminderDate}
+                    />
+                    {Platform.OS === "ios" ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => setShowReminderPicker(false)}
+                        style={styles.pickerDone}
+                      >
+                        <Text style={styles.pickerDoneText}>{t("done")}</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
+                {reminderStatus === "permissionDenied" ? (
+                  <Text style={styles.error}>{t("reminderPermissionDenied")}</Text>
+                ) : reminderStatus === "invalidTime" ? (
+                  <Text style={styles.error}>{t("reminderTimeInvalid")}</Text>
+                ) : reminderStatus === "error" ? (
+                  <Text style={styles.error}>{t("requestFailed")}</Text>
+                ) : null}
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => setSheet(null)}

@@ -14,6 +14,11 @@ import {
   type Language,
   type LocalSettings,
 } from "@/settings/settingsStorage";
+import {
+  configureNotificationPresentation,
+  syncDailyReminder,
+  type ReminderSyncResult,
+} from "@/notifications/reminderNotifications";
 
 const translations = {
   en: {
@@ -39,6 +44,9 @@ const translations = {
     reminder: "Daily reminder",
     reminderTime: "Reminder time",
     reminderHint: "Saved on this device for local reminders.",
+    reminderPermissionDenied:
+      "Notifications are disabled. Enable them in your phone settings to receive daily reminders.",
+    reminderTimeInvalid: "Choose a reminder time in HH:MM format.",
     on: "On",
     off: "Off",
     done: "Done",
@@ -251,6 +259,9 @@ const translations = {
     reminder: "每日提醒",
     reminderTime: "提醒时间",
     reminderHint: "保存在此设备，用于本地提醒。",
+    reminderPermissionDenied:
+      "通知已关闭。请在手机设置中开启通知，以接收每日提醒。",
+    reminderTimeInvalid: "请使用 HH:MM 格式设置提醒时间。",
     on: "开启",
     off: "关闭",
     done: "完成",
@@ -447,6 +458,7 @@ type SettingsContextValue = LocalSettings & {
   setLanguage: (language: Language) => void;
   setRemindersEnabled: (enabled: boolean) => void;
   setReminderTime: (time: string) => void;
+  reminderStatus: ReminderSyncResult | "idle";
   t: (key: TranslationKey) => string;
 };
 
@@ -455,6 +467,7 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 export function SettingsProvider({ children }: PropsWithChildren) {
   const [settings, setSettings] = useState<LocalSettings>(defaultSettings);
   const [isReady, setIsReady] = useState(false);
+  const [reminderStatus, setReminderStatus] = useState<ReminderSyncResult | "idle">("idle");
 
   useEffect(() => {
     void readLocalSettings().then((stored) => {
@@ -464,8 +477,17 @@ export function SettingsProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
-    if (isReady) void writeLocalSettings(settings);
+    if (!isReady) return;
+    void writeLocalSettings(settings);
+    const timeout = setTimeout(() => {
+      void syncDailyReminder(settings).then(setReminderStatus);
+    }, 250);
+    return () => clearTimeout(timeout);
   }, [isReady, settings]);
+
+  useEffect(() => {
+    configureNotificationPresentation();
+  }, []);
   const update = useCallback(
     (change: Partial<LocalSettings>) =>
       setSettings((current) => ({ ...current, ...change })),
@@ -478,9 +500,10 @@ export function SettingsProvider({ children }: PropsWithChildren) {
       setLanguage: (language) => update({ language }),
       setRemindersEnabled: (remindersEnabled) => update({ remindersEnabled }),
       setReminderTime: (reminderTime) => update({ reminderTime }),
+      reminderStatus,
       t: (key) => translations[settings.language][key],
     }),
-    [isReady, settings, update],
+    [isReady, reminderStatus, settings, update],
   );
   return (
     <SettingsContext.Provider value={value}>

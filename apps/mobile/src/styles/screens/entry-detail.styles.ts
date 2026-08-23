@@ -55,6 +55,7 @@ export const entryDetailStyles = StyleSheet.create({
     width: 40,
   },
   avatarImage: { borderRadius: 20, height: 40, width: 40 },
+  avatarText: { color: colors.sageDark, fontSize: 16, fontWeight: "800" },
   authorCopy: { flex: 1 },
   author: { color: colors.ink, fontFamily: typography.uiBold, fontSize: 14 },
   when: { color: colors.inkSoft, fontSize: 11, marginTop: 2 },
@@ -149,6 +150,7 @@ export const entryDetailStyles = StyleSheet.create({
     width: 28,
   },
   commentAvatarImage: { borderRadius: 14, height: 28, width: 28 },
+  commentAvatarText: { color: colors.sageDark, fontSize: 11, fontWeight: "800" },
   commentBubble: {
     backgroundColor: colors.card,
     borderColor: colors.line,

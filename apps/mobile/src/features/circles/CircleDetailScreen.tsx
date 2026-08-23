@@ -13,6 +13,7 @@ import {
 import DateTimePicker, { type DateTimePickerChangeEvent } from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "@/components/Screen";
+import { Avatar } from "@/components/Avatar";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
 import type { CircleDetail } from "@/types/api";
@@ -287,11 +288,14 @@ export default function CircleDetailScreen() {
       </Text>
       {members.map((member) => (
         <View key={member.userId} style={styles.member}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {member.displayName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          <Avatar
+            accessibilityLabel={member.displayName}
+            containerStyle={styles.avatar}
+            imageStyle={styles.avatarImage}
+            initial={member.displayName.charAt(0).toUpperCase() || "?"}
+            textStyle={styles.avatarText}
+            uri={member.avatarUrl}
+          />
           <View style={styles.memberCopy}>
             <Text style={styles.memberName}>{member.displayName}</Text>
             <Text style={styles.memberMeta}>

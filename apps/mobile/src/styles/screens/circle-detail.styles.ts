@@ -26,6 +26,7 @@ export const circleDetailStyles = StyleSheet.create({
   section: { color: colors.inkSoft, fontSize: 12, fontWeight: '800', letterSpacing: 1, marginTop: spacing.xl, textTransform: 'uppercase' },
   member: { ...shadows.card, alignItems: 'center', backgroundColor: colors.card, borderColor: colors.line, borderRadius: 16, borderWidth: 1, flexDirection: 'row', marginTop: spacing.sm, padding: spacing.md },
   avatar: { alignItems: 'center', backgroundColor: colors.sageLight, borderRadius: 18, height: 36, justifyContent: 'center', marginRight: spacing.sm, width: 36 },
+  avatarImage: { borderRadius: 18, height: 36, width: 36 },
   avatarText: { color: colors.sageDark, fontSize: 14, fontWeight: '800' },
   memberCopy: { flex: 1 },
   memberName: { color: colors.ink, fontFamily: typography.uiBold, fontSize: 14 },

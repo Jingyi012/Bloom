@@ -137,7 +137,7 @@ export default function CirclesScreen() {
         setError(
           responseError instanceof Error
             ? responseError.message
-          : t("invitationUpdateFailed"),
+            : t("invitationUpdateFailed"),
         );
       }
     },
@@ -302,9 +302,7 @@ export default function CirclesScreen() {
           data={circles}
           keyExtractor={(item) => item.id}
           ListEmptyComponent={
-            <Text style={styles.empty}>
-              {t("noCirclesYet")}
-            </Text>
+            <Text style={styles.empty}>{t("noCirclesYet")}</Text>
           }
           ListHeaderComponent={header}
           onRefresh={() => void load(true)}
@@ -355,16 +353,13 @@ function CircleCard({
         <Text style={styles.cardBody}>
           {bloomed
             ? t("sharedTimelineReady")
-            : `${t("circleBlooms")} ${formatDate(circle.bloomAtUtc)}`}
+            : `${t("circleBlooms")} ${formatLocalDate(circle.bloomAtUtc)}`}
         </Text>
         <Text style={styles.memberCount}>
-          {circle.memberCount} {circle.memberCount === 1 ? t("member") : t("memberPlural")}
+          {circle.memberCount}{" "}
+          {circle.memberCount === 1 ? t("member") : t("memberPlural")}
         </Text>
       </View>
     </Pressable>
   );
-}
-
-function formatDate(value: string): string {
-  return formatLocalDate(value);
 }

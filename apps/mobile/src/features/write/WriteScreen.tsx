@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -124,13 +125,12 @@ export default function WriteScreen() {
     }
   }, [session?.accessToken, t]);
 
-  useEffect(() => {
-    void loadCircles();
-  }, [loadCircles]);
-
-  useEffect(() => {
-    void loadTodayStatus();
-  }, [loadTodayStatus]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadCircles();
+      void loadTodayStatus();
+    }, [loadCircles, loadTodayStatus]),
+  );
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {

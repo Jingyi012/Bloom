@@ -22,8 +22,12 @@ import type { CircleMember, TimelineDay, TimelineEntry } from "@/types/api";
 import { colors } from "@/styles/tokens";
 import { bloomStyles as styles } from "@/styles/screens/bloom.styles";
 import { InlineAlert } from "@/components/InlineAlert";
+import { Avatar } from "@/components/Avatar";
 import { useSettings } from "@/settings/SettingsProvider";
-import { REACTION_OPTIONS, type ReactionCode } from "@/features/bloom/reactions";
+import {
+  REACTION_OPTIONS,
+  type ReactionCode,
+} from "@/features/bloom/reactions";
 import {
   formatLocalDate,
   formatLocalTime,
@@ -85,7 +89,15 @@ export default function BloomTimelineScreen() {
   );
 
   const loadMore = useCallback(async () => {
-    if (!session?.accessToken || !circleId || !nextCursor || isLoading || isRefreshing || loadingMoreRef.current) return;
+    if (
+      !session?.accessToken ||
+      !circleId ||
+      !nextCursor ||
+      isLoading ||
+      isRefreshing ||
+      loadingMoreRef.current
+    )
+      return;
     loadingMoreRef.current = true;
     setIsLoadingMore(true);
     try {
@@ -97,29 +109,51 @@ export default function BloomTimelineScreen() {
         selectedAuthorId ?? undefined,
       );
       setDays((current) => {
-        const merged = current.map((day) => ({ ...day, entries: [...day.entries] }));
+        const merged = current.map((day) => ({
+          ...day,
+          entries: [...day.entries],
+        }));
         for (const incomingDay of page.days) {
-          const existingDay = merged.find((day) => day.date === incomingDay.date);
+          const existingDay = merged.find(
+            (day) => day.date === incomingDay.date,
+          );
           if (!existingDay) {
             merged.push(incomingDay);
             continue;
           }
-          const existingIds = new Set(existingDay.entries.map((entry) => entry.publicationId));
+          const existingIds = new Set(
+            existingDay.entries.map((entry) => entry.publicationId),
+          );
           existingDay.entries = [
             ...existingDay.entries,
-            ...incomingDay.entries.filter((entry) => !existingIds.has(entry.publicationId)),
+            ...incomingDay.entries.filter(
+              (entry) => !existingIds.has(entry.publicationId),
+            ),
           ];
         }
         return merged;
       });
       setNextCursor(page.nextCursor);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : t("timelineLoadFailed"));
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : t("timelineLoadFailed"),
+      );
     } finally {
       loadingMoreRef.current = false;
       setIsLoadingMore(false);
     }
-  }, [circleId, isLoading, isRefreshing, nextCursor, selectedAuthorId, selectedDate, session?.accessToken, t]);
+  }, [
+    circleId,
+    isLoading,
+    isRefreshing,
+    nextCursor,
+    selectedAuthorId,
+    selectedDate,
+    session?.accessToken,
+    t,
+  ]);
 
   useEffect(() => {
     void load();
@@ -153,7 +187,8 @@ export default function BloomTimelineScreen() {
 
   const applyFilters = useCallback(() => {
     const nextDate = draftDate ? toLocalDateValue(draftDate) : null;
-    const filtersChanged = nextDate !== selectedDate || draftAuthorId !== selectedAuthorId;
+    const filtersChanged =
+      nextDate !== selectedDate || draftAuthorId !== selectedAuthorId;
     setSelectedDate(nextDate);
     setSelectedAuthorId(draftAuthorId);
     setFilterSheetVisible(false);
@@ -168,7 +203,8 @@ export default function BloomTimelineScreen() {
   }, [draftAuthorId, draftDate, load, selectedAuthorId, selectedDate]);
 
   const resetFilters = useCallback(() => {
-    const filtersWereActive = selectedDate !== null || selectedAuthorId !== null;
+    const filtersWereActive =
+      selectedDate !== null || selectedAuthorId !== null;
     setDraftDate(null);
     setDraftAuthorId(null);
     setSelectedDate(null);
@@ -191,7 +227,9 @@ export default function BloomTimelineScreen() {
   const updateReaction = useCallback(
     async (entry: TimelineEntry, code: ReactionCode) => {
       if (!session?.accessToken) return;
-      const current = entry.reactions.find((reaction) => reaction.emojiCode === code);
+      const current = entry.reactions.find(
+        (reaction) => reaction.emojiCode === code,
+      );
       try {
         const result = current?.reactedByCurrentUser
           ? await bloomApi.removeReaction(
@@ -243,7 +281,11 @@ export default function BloomTimelineScreen() {
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <MaterialCommunityIcons color={colors.ink} name="arrow-left" size={19} />
+          <MaterialCommunityIcons
+            color={colors.ink}
+            name="arrow-left"
+            size={19}
+          />
         </Pressable>
         <Text numberOfLines={1} style={styles.topBarTitle}>
           {circleName || t("timelineTitle")} {circleEmoji || "🌸"}
@@ -252,14 +294,20 @@ export default function BloomTimelineScreen() {
       </View>
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <Text style={[styles.subtitle, styles.headerCopy]}>{t("timelineSubtitle")}</Text>
+          <Text style={[styles.subtitle, styles.headerCopy]}>
+            {t("timelineSubtitle")}
+          </Text>
           <Pressable
             accessibilityLabel={t("filter")}
             accessibilityRole="button"
             onPress={openFilterSheet}
             style={styles.filterButton}
           >
-            <MaterialCommunityIcons color={colors.ink} name="filter-variant" size={16} />
+            <MaterialCommunityIcons
+              color={colors.ink}
+              name="filter-variant"
+              size={16}
+            />
             <Text style={styles.filterButtonText}>{t("filter")}</Text>
           </Pressable>
         </View>
@@ -267,17 +315,33 @@ export default function BloomTimelineScreen() {
           <View style={styles.filterChips}>
             {selectedDate ? (
               <View style={styles.filterChip}>
-                <MaterialCommunityIcons color={colors.sageDark} name="calendar-outline" size={14} />
-                <Text style={styles.filterChipText}>{formatDate(selectedDate)}</Text>
+                <MaterialCommunityIcons
+                  color={colors.sageDark}
+                  name="calendar-outline"
+                  size={14}
+                />
+                <Text style={styles.filterChipText}>
+                  {formatDate(selectedDate)}
+                </Text>
               </View>
             ) : null}
             {selectedAuthorId ? (
               <View style={styles.filterChip}>
-                <MaterialCommunityIcons color={colors.sageDark} name="account-outline" size={14} />
-                <Text style={styles.filterChipText}>{selectedMemberName ?? t("person")}</Text>
+                <MaterialCommunityIcons
+                  color={colors.sageDark}
+                  name="account-outline"
+                  size={14}
+                />
+                <Text style={styles.filterChipText}>
+                  {selectedMemberName ?? t("person")}
+                </Text>
               </View>
             ) : null}
-            <Pressable accessibilityRole="button" onPress={resetFilters} style={styles.filterReset}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={resetFilters}
+              style={styles.filterReset}
+            >
               <Text style={styles.filterResetText}>{t("resetFilters")}</Text>
             </Pressable>
           </View>
@@ -322,7 +386,9 @@ export default function BloomTimelineScreen() {
                   params: { publicationId: entry.publicationId },
                 })
               }
-              onSelectReaction={(entry, code) => void updateReaction(entry, code)}
+              onSelectReaction={(entry, code) =>
+                void updateReaction(entry, code)
+              }
             />
           )}
           showsVerticalScrollIndicator={false}
@@ -338,7 +404,10 @@ export default function BloomTimelineScreen() {
           onPress={() => setFilterSheetVisible(false)}
           style={styles.sheetBackdrop}
         >
-          <Pressable onPress={(event) => event.stopPropagation()} style={styles.sheet}>
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={styles.sheet}
+          >
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{t("filter")}</Text>
@@ -349,27 +418,45 @@ export default function BloomTimelineScreen() {
                 onPress={() => setFilterSheetVisible(false)}
                 style={styles.sheetClose}
               >
-                <MaterialCommunityIcons color={colors.inkSoft} name="close" size={20} />
+                <MaterialCommunityIcons
+                  color={colors.inkSoft}
+                  name="close"
+                  size={20}
+                />
               </Pressable>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.filterSectionTitle}>{t("filterByDate")}</Text>
               <View style={styles.filterDateRow}>
-              <Pressable
-                onPress={() => setShowDatePicker(true)}
-                style={styles.filterDateButton}
-              >
-                <MaterialCommunityIcons color={colors.sageDark} name="calendar-outline" size={18} />
-                <Text style={styles.filterDateText}>
-                  {draftDate ? formatDate(toLocalDateValue(draftDate)) : t("anyDate")}
-                </Text>
-              </Pressable>
-              {draftDate ? (
-                <Pressable accessibilityRole="button" onPress={() => setDraftDate(null)} style={styles.filterClearButton}>
-                  <MaterialCommunityIcons color={colors.inkSoft} name="close-circle-outline" size={20} />
+                <Pressable
+                  onPress={() => setShowDatePicker(true)}
+                  style={styles.filterDateButton}
+                >
+                  <MaterialCommunityIcons
+                    color={colors.sageDark}
+                    name="calendar-outline"
+                    size={18}
+                  />
+                  <Text style={styles.filterDateText}>
+                    {draftDate
+                      ? formatDate(toLocalDateValue(draftDate))
+                      : t("anyDate")}
+                  </Text>
                 </Pressable>
-              ) : null}
+                {draftDate ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setDraftDate(null)}
+                    style={styles.filterClearButton}
+                  >
+                    <MaterialCommunityIcons
+                      color={colors.inkSoft}
+                      name="close-circle-outline"
+                      size={20}
+                    />
+                  </Pressable>
+                ) : null}
               </View>
               {showDatePicker ? (
                 <View style={styles.pickerPanel}>
@@ -387,41 +474,83 @@ export default function BloomTimelineScreen() {
                 </View>
               ) : null}
 
-              <Text style={styles.filterSectionTitle}>{t("filterByPerson")}</Text>
+              <Text style={styles.filterSectionTitle}>
+                {t("filterByPerson")}
+              </Text>
               <Pressable
                 onPress={() => setDraftAuthorId(null)}
-                style={[styles.filterMember, draftAuthorId === null ? styles.filterMemberSelected : null]}
+                style={[
+                  styles.filterMember,
+                  draftAuthorId === null ? styles.filterMemberSelected : null,
+                ]}
               >
                 <View style={styles.filterMemberAvatar}>
-                  <MaterialCommunityIcons color={colors.sageDark} name="account-group-outline" size={18} />
+                  <MaterialCommunityIcons
+                    color={colors.sageDark}
+                    name="account-group-outline"
+                    size={18}
+                  />
                 </View>
                 <Text style={styles.filterMemberName}>{t("everyone")}</Text>
-                {draftAuthorId === null ? <MaterialCommunityIcons color={colors.sageDark} name="check" size={19} /> : null}
+                {draftAuthorId === null ? (
+                  <MaterialCommunityIcons
+                    color={colors.sageDark}
+                    name="check"
+                    size={19}
+                  />
+                ) : null}
               </Pressable>
               {members.map((member) => {
                 const isSelected = draftAuthorId === member.userId;
-                const initial = member.displayName.trim().charAt(0).toUpperCase() || "?";
+                const initial =
+                  member.displayName.trim().charAt(0).toUpperCase() || "?";
                 return (
                   <Pressable
                     key={member.userId}
                     onPress={() => setDraftAuthorId(member.userId)}
-                    style={[styles.filterMember, isSelected ? styles.filterMemberSelected : null]}
+                    style={[
+                      styles.filterMember,
+                      isSelected ? styles.filterMemberSelected : null,
+                    ]}
                   >
-                    <View style={styles.filterMemberAvatar}>
-                      <Text style={styles.filterMemberAvatarText}>{initial}</Text>
-                    </View>
-                    <Text numberOfLines={1} style={styles.filterMemberName}>{member.displayName}</Text>
-                    {isSelected ? <MaterialCommunityIcons color={colors.sageDark} name="check" size={19} /> : null}
+                  <Avatar
+                    accessibilityLabel={member.displayName}
+                    containerStyle={styles.filterMemberAvatar}
+                    imageStyle={styles.filterMemberAvatarImage}
+                    initial={initial}
+                    textStyle={styles.filterMemberAvatarText}
+                    uri={member.avatarUrl}
+                  />
+                    <Text numberOfLines={1} style={styles.filterMemberName}>
+                      {member.displayName}
+                    </Text>
+                    {isSelected ? (
+                      <MaterialCommunityIcons
+                        color={colors.sageDark}
+                        name="check"
+                        size={19}
+                      />
+                    ) : null}
                   </Pressable>
                 );
               })}
 
               <View style={styles.filterActions}>
-                <Pressable onPress={resetFilters} style={styles.filterResetButton}>
-                  <Text style={styles.filterResetButtonText}>{t("resetFilters")}</Text>
+                <Pressable
+                  onPress={resetFilters}
+                  style={styles.filterResetButton}
+                >
+                  <Text style={styles.filterResetButtonText}>
+                    {t("resetFilters")}
+                  </Text>
                 </Pressable>
-                <Pressable onPress={applyFilters} style={styles.filterApplyButton}>
-                  <Text style={styles.filterApplyButtonText}>{t("applyFilters")}</Text>
+                <Pressable
+                  onPress={applyFilters}
+                  style={styles.filterApplyButton}
+                >
+                  <Text style={styles.filterApplyButtonText}>
+                    {t("applyFilters")}
+                  </Text>
                 </Pressable>
               </View>
             </ScrollView>
@@ -483,7 +612,9 @@ const DayCarousel = memo(function DayCarousel({
         horizontal
         nestedScrollEnabled
         onMomentumScrollEnd={(event) => {
-          setActiveIndex(Math.round(event.nativeEvent.contentOffset.x / itemSize));
+          setActiveIndex(
+            Math.round(event.nativeEvent.contentOffset.x / itemSize),
+          );
         }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { x: scrollX } } }],
@@ -494,7 +625,11 @@ const DayCarousel = memo(function DayCarousel({
         snapToInterval={itemSize}
       >
         {entries.map((entry, index) => {
-          const inputRange = [(index - 1) * itemSize, index * itemSize, (index + 1) * itemSize];
+          const inputRange = [
+            (index - 1) * itemSize,
+            index * itemSize,
+            (index + 1) * itemSize,
+          ];
           const animatedStyle = {
             opacity: scrollX.interpolate({
               inputRange,
@@ -512,7 +647,10 @@ const DayCarousel = memo(function DayCarousel({
             ],
           };
           return (
-            <Animated.View key={entry.publicationId} style={[styles.carouselItem, { width: itemWidth }, animatedStyle]}>
+            <Animated.View
+              key={entry.publicationId}
+              style={[styles.carouselItem, { width: itemWidth }, animatedStyle]}
+            >
               <TimelineCard
                 accessToken={accessToken}
                 entry={entry}
@@ -524,13 +662,24 @@ const DayCarousel = memo(function DayCarousel({
         })}
       </Animated.ScrollView>
       {entries.length > 1 ? (
-        <View accessibilityLabel={`${activeIndex + 1} ${t("of")} ${entries.length}`} style={styles.carouselIndicatorRow}>
+        <View
+          accessibilityLabel={`${activeIndex + 1} ${t("of")} ${entries.length}`}
+          style={styles.carouselIndicatorRow}
+        >
           <View style={styles.carouselDots}>
             {entries.map((entry, index) => (
-              <View key={entry.publicationId} style={[styles.carouselDot, index === activeIndex ? styles.carouselDotActive : null]} />
+              <View
+                key={entry.publicationId}
+                style={[
+                  styles.carouselDot,
+                  index === activeIndex ? styles.carouselDotActive : null,
+                ]}
+              />
             ))}
           </View>
-          <Text style={styles.carouselCount}>{activeIndex + 1} / {entries.length}</Text>
+          <Text style={styles.carouselCount}>
+            {activeIndex + 1} / {entries.length}
+          </Text>
         </View>
       ) : null}
     </View>
@@ -554,8 +703,13 @@ const TimelineCard = memo(function TimelineCard({
   const reaction = entry.reactions.find(
     (item) => item.emojiCode === REACTION_OPTIONS[0].code,
   );
-  const currentUserReaction = entry.reactions.find((item) => item.reactedByCurrentUser);
-  const selectedReaction = REACTION_OPTIONS.find((option) => option.code === currentUserReaction?.emojiCode) ?? REACTION_OPTIONS[0];
+  const currentUserReaction = entry.reactions.find(
+    (item) => item.reactedByCurrentUser,
+  );
+  const selectedReaction =
+    REACTION_OPTIONS.find(
+      (option) => option.code === currentUserReaction?.emojiCode,
+    ) ?? REACTION_OPTIONS[0];
   const initial = entry.authorDisplayName.trim().charAt(0).toUpperCase() || "?";
   return (
     <View style={[styles.card, showReactionPicker ? styles.cardOpen : null]}>
@@ -566,9 +720,14 @@ const TimelineCard = memo(function TimelineCard({
         style={({ pressed }) => [pressed ? styles.cardPressed : null]}
       >
         <View style={styles.authorRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initial}</Text>
-          </View>
+          <Avatar
+            accessibilityLabel={entry.authorDisplayName}
+            containerStyle={styles.avatar}
+            imageStyle={styles.avatarImage}
+            initial={initial}
+            textStyle={styles.avatarText}
+            uri={entry.authorAvatarUrl}
+          />
           <View style={styles.authorCopy}>
             <Text style={styles.author}>{entry.authorDisplayName}</Text>
             <Text style={styles.date}>
@@ -647,7 +806,9 @@ const TimelineCard = memo(function TimelineCard({
           ]}
         >
           <Text style={styles.reactionText}>{selectedReaction.icon}</Text>
-          <Text style={styles.reactionCount}>{currentUserReaction?.count ?? reaction?.count ?? 0}</Text>
+          <Text style={styles.reactionCount}>
+            {currentUserReaction?.count ?? reaction?.count ?? 0}
+          </Text>
         </Pressable>
         <Pressable
           accessibilityLabel={`${entry.commentCount} ${entry.commentCount === 1 ? t("comment") : t("comments")}`}

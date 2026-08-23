@@ -38,7 +38,12 @@ export function formatLocalDate(value: string | Date): string {
 
 /** Formats an instant's clock time in the device's local timezone. */
 export function formatLocalTime(value: string | Date): string {
-  return new Intl.DateTimeFormat(undefined, { timeStyle: "short", timeZone: localTimeZone() }).format(toDate(value));
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    hour12: true,
+    minute: "2-digit",
+    timeZone: localTimeZone(),
+  }).format(toDate(value));
 }
 
 /** Formats an instant with both date and clock time in the device's local timezone. */

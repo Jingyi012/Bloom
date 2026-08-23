@@ -13,7 +13,8 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-image-picker"
+      "expo-image-picker",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true

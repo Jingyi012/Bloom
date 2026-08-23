@@ -28,28 +28,31 @@ export default function HomeScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (refresh = false) => {
-    if (!session?.accessToken) return;
-    refresh ? setIsRefreshing(true) : setIsLoading(true);
-    setError(null);
-    try {
-      const [nextCircles, nextStats] = await Promise.all([
-        bloomApi.listCircles(session.accessToken),
-        bloomApi.stats(session.accessToken),
-      ]);
-      setCircles(nextCircles);
-      setStats(nextStats);
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : t("gardenLoadFailed"),
-      );
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [session?.accessToken, t]);
+  const load = useCallback(
+    async (refresh = false) => {
+      if (!session?.accessToken) return;
+      refresh ? setIsRefreshing(true) : setIsLoading(true);
+      setError(null);
+      try {
+        const [nextCircles, nextStats] = await Promise.all([
+          bloomApi.listCircles(session.accessToken),
+          bloomApi.stats(session.accessToken),
+        ]);
+        setCircles(nextCircles);
+        setStats(nextStats);
+      } catch (loadError) {
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : t("gardenLoadFailed"),
+        );
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [session?.accessToken, t],
+  );
 
   useEffect(() => {
     void load();
@@ -84,7 +87,9 @@ export default function HomeScreen() {
         <Text style={styles.ctaBody}>{t("homeWriteBody")}</Text>
         <Text style={styles.ctaAction}>{t("openEditor")}</Text>
       </Pressable>
-      {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
+      {error ? (
+        <InlineAlert message={error} onDismiss={() => setError(null)} />
+      ) : null}
       {isLoading ? (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.coralDark} />
@@ -179,7 +184,8 @@ function CircleCard({
             : `${t("circleBlooms")} ${formatDate(circle.bloomAtUtc)}`}
         </Text>
         <Text style={styles.cardMeta}>
-          {circle.memberCount} {circle.memberCount === 1 ? t("member") : t("memberPlural")}
+          {circle.memberCount}{" "}
+          {circle.memberCount === 1 ? t("member") : t("memberPlural")}
         </Text>
       </View>
       <Text style={styles.chevron}>›</Text>
