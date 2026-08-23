@@ -25,7 +25,9 @@ public sealed class TimelineController(IEntryService entryService) : ControllerB
         try
         {
             var page = await _entryService.GetTimelineAsync(userId, circleId, cursor, date, authorUserId, cancellationToken).ConfigureAwait(false);
-            return Ok(new TimelineResponse(page.Items.Select(ToResponse).ToArray(), page.NextCursor));
+            return Ok(new TimelineResponse(
+                page.Days.Select(day => new TimelineDayResponse(day.Date, day.Entries.Select(ToResponse).ToArray())).ToArray(),
+                page.NextCursor));
         }
         catch (CircleNotBloomedException)
         {

@@ -4,7 +4,9 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   ActivityIndicator,
+  Animated,
   AppState,
+  useWindowDimensions,
   Modal,
   Pressable,
   ScrollView,
@@ -16,7 +18,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "@/components/Screen";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
-import type { CircleMember, TimelineEntry } from "@/types/api";
+import type { CircleMember, TimelineDay, TimelineEntry } from "@/types/api";
 import { colors } from "@/styles/tokens";
 import { bloomStyles as styles } from "@/styles/screens/bloom.styles";
 import { InlineAlert } from "@/components/InlineAlert";
@@ -38,7 +40,7 @@ export default function BloomTimelineScreen() {
   const router = useRouter();
   const { session } = useAuth();
   const { t } = useSettings();
-  const [entries, setEntries] = useState<TimelineEntry[]>([]);
+  const [days, setDays] = useState<TimelineDay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -66,7 +68,7 @@ export default function BloomTimelineScreen() {
           selectedDate ?? undefined,
           selectedAuthorId ?? undefined,
         );
-        setEntries(page.items);
+        setDays(page.days);
         setNextCursor(page.nextCursor);
       } catch (loadError) {
         setError(
@@ -94,9 +96,21 @@ export default function BloomTimelineScreen() {
         selectedDate ?? undefined,
         selectedAuthorId ?? undefined,
       );
-      setEntries((current) => {
-        const existingIds = new Set(current.map((entry) => entry.publicationId));
-        return [...current, ...page.items.filter((entry) => !existingIds.has(entry.publicationId))];
+      setDays((current) => {
+        const merged = current.map((day) => ({ ...day, entries: [...day.entries] }));
+        for (const incomingDay of page.days) {
+          const existingDay = merged.find((day) => day.date === incomingDay.date);
+          if (!existingDay) {
+            merged.push(incomingDay);
+            continue;
+          }
+          const existingIds = new Set(existingDay.entries.map((entry) => entry.publicationId));
+          existingDay.entries = [
+            ...existingDay.entries,
+            ...incomingDay.entries.filter((entry) => !existingIds.has(entry.publicationId)),
+          ];
+        }
+        return merged;
       });
       setNextCursor(page.nextCursor);
     } catch (loadError) {
@@ -145,7 +159,7 @@ export default function BloomTimelineScreen() {
     setFilterSheetVisible(false);
     setShowDatePicker(false);
     if (filtersChanged) {
-      setEntries([]);
+      setDays([]);
       setNextCursor(null);
       loadingMoreRef.current = false;
     } else {
@@ -162,7 +176,7 @@ export default function BloomTimelineScreen() {
     setFilterSheetVisible(false);
     setShowDatePicker(false);
     if (filtersWereActive) {
-      setEntries([]);
+      setDays([]);
       setNextCursor(null);
       loadingMoreRef.current = false;
     } else {
@@ -190,20 +204,23 @@ export default function BloomTimelineScreen() {
               entry.publicationId,
               code,
             );
-        setEntries((items) =>
-          items.map((item) =>
-            item.publicationId === entry.publicationId
-              ? {
-                  ...item,
-                  reactions: [
-                    ...item.reactions.filter(
-                      (reaction) => reaction.emojiCode !== code,
-                    ),
-                    result,
-                  ],
-                }
-              : item,
-          ),
+        setDays((currentDays) =>
+          currentDays.map((day) => ({
+            ...day,
+            entries: day.entries.map((item) =>
+              item.publicationId === entry.publicationId
+                ? {
+                    ...item,
+                    reactions: [
+                      ...item.reactions.filter(
+                        (reaction) => reaction.emojiCode !== code,
+                      ),
+                      result,
+                    ],
+                  }
+                : item,
+            ),
+          })),
         );
       } catch (reactionError) {
         setError(
@@ -275,9 +292,9 @@ export default function BloomTimelineScreen() {
         </View>
       ) : (
         <FlashList
-          data={entries}
+          data={days}
           contentContainerStyle={styles.listContent}
-          keyExtractor={(item) => item.publicationId}
+          keyExtractor={(item) => item.date}
           ListEmptyComponent={
             <Text style={styles.empty}>{t("noSharedEntries")}</Text>
           }
@@ -287,7 +304,7 @@ export default function BloomTimelineScreen() {
                 <ActivityIndicator color={colors.coralDark} />
                 <Text style={styles.loadMoreText}>{t("loadingMore")}</Text>
               </View>
-            ) : nextCursor === null && entries.length > 0 ? (
+            ) : nextCursor === null && days.length > 0 ? (
               <Text style={styles.timelineEnd}>{t("timelineEnd")}</Text>
             ) : null
           }
@@ -295,24 +312,18 @@ export default function BloomTimelineScreen() {
           onEndReachedThreshold={0.6}
           onRefresh={() => void load(true)}
           refreshing={isRefreshing}
-          renderItem={({ item, index }) => (
-            <View>
-              {index === 0 ||
-              entries[index - 1]?.authorLocalDate !== item.authorLocalDate ? (
-                <DateDivider date={item.authorLocalDate} />
-              ) : null}
-              <TimelineCard
-                accessToken={session?.accessToken}
-                entry={item}
-                onOpen={() =>
-                  router.push({
-                    pathname: "/entry/[publicationId]",
-                    params: { publicationId: item.publicationId },
-                  })
-                }
-                onSelectReaction={(code) => void updateReaction(item, code)}
-              />
-            </View>
+          renderItem={({ item }) => (
+            <DaySection
+              accessToken={session?.accessToken}
+              day={item}
+              onOpen={(entry) =>
+                router.push({
+                  pathname: "/entry/[publicationId]",
+                  params: { publicationId: entry.publicationId },
+                })
+              }
+              onSelectReaction={(entry, code) => void updateReaction(entry, code)}
+            />
           )}
           showsVerticalScrollIndicator={false}
         />
@@ -420,6 +431,111 @@ export default function BloomTimelineScreen() {
     </Screen>
   );
 }
+
+const DaySection = memo(function DaySection({
+  accessToken,
+  day,
+  onOpen,
+  onSelectReaction,
+}: {
+  accessToken?: string;
+  day: TimelineDay;
+  onOpen: (entry: TimelineEntry) => void;
+  onSelectReaction: (entry: TimelineEntry, code: ReactionCode) => void;
+}) {
+  return (
+    <View style={styles.daySection}>
+      <DateDivider date={day.date} />
+      <DayCarousel
+        accessToken={accessToken}
+        entries={day.entries}
+        onOpen={onOpen}
+        onSelectReaction={onSelectReaction}
+      />
+    </View>
+  );
+});
+
+const DayCarousel = memo(function DayCarousel({
+  accessToken,
+  entries,
+  onOpen,
+  onSelectReaction,
+}: {
+  accessToken?: string;
+  entries: TimelineEntry[];
+  onOpen: (entry: TimelineEntry) => void;
+  onSelectReaction: (entry: TimelineEntry, code: ReactionCode) => void;
+}) {
+  const { width } = useWindowDimensions();
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const itemWidth = Math.max(280, width - 64);
+  const itemSize = itemWidth + 12;
+  const [activeIndex, setActiveIndex] = useState(0);
+  const { t } = useSettings();
+
+  return (
+    <View>
+      <Animated.ScrollView
+        contentContainerStyle={styles.carouselContent}
+        decelerationRate="fast"
+        directionalLockEnabled
+        horizontal
+        nestedScrollEnabled
+        onMomentumScrollEnd={(event) => {
+          setActiveIndex(Math.round(event.nativeEvent.contentOffset.x / itemSize));
+        }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: true },
+        )}
+        scrollEventThrottle={16}
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={itemSize}
+      >
+        {entries.map((entry, index) => {
+          const inputRange = [(index - 1) * itemSize, index * itemSize, (index + 1) * itemSize];
+          const animatedStyle = {
+            opacity: scrollX.interpolate({
+              inputRange,
+              outputRange: [0.72, 1, 0.72],
+              extrapolate: "clamp" as const,
+            }),
+            transform: [
+              {
+                scale: scrollX.interpolate({
+                  inputRange,
+                  outputRange: [0.96, 1, 0.96],
+                  extrapolate: "clamp" as const,
+                }),
+              },
+            ],
+          };
+          return (
+            <Animated.View key={entry.publicationId} style={[styles.carouselItem, { width: itemWidth }, animatedStyle]}>
+              <TimelineCard
+                accessToken={accessToken}
+                entry={entry}
+                onOpen={() => onOpen(entry)}
+                onSelectReaction={(code) => onSelectReaction(entry, code)}
+              />
+            </Animated.View>
+          );
+        })}
+      </Animated.ScrollView>
+      {entries.length > 1 ? (
+        <View accessibilityLabel={`${activeIndex + 1} ${t("of")} ${entries.length}`} style={styles.carouselIndicatorRow}>
+          <View style={styles.carouselDots}>
+            {entries.map((entry, index) => (
+              <View key={entry.publicationId} style={[styles.carouselDot, index === activeIndex ? styles.carouselDotActive : null]} />
+            ))}
+          </View>
+          <Text style={styles.carouselCount}>{activeIndex + 1} / {entries.length}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+});
 
 const TimelineCard = memo(function TimelineCard({
   accessToken,

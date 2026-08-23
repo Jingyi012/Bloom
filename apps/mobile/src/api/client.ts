@@ -20,6 +20,7 @@ import type {
   InviteCircleMemberResponse,
   RefreshSessionResponse,
   UserStatsResponse,
+  TimelineEntry,
 } from "@/types/api";
 
 const apiUrl =
@@ -233,7 +234,7 @@ export const bloomApi = {
     );
   },
   getEntry: (accessToken: string, publicationId: string) =>
-    requestJson<TimelineResponse["items"][number]>(
+    requestJson<TimelineEntry>(
       `/entries/${publicationId}`,
       {
         headers: { Authorization: `Bearer ${accessToken}` },

@@ -147,8 +147,13 @@ export type TimelineEntry = {
   commentCount: number;
 };
 
+export type TimelineDay = {
+  date: string;
+  entries: TimelineEntry[];
+};
+
 export type TimelineResponse = {
-  items: TimelineEntry[];
+  days: TimelineDay[];
   nextCursor: string | null;
 };
 

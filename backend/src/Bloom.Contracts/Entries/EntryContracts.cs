@@ -49,8 +49,11 @@ public sealed record TimelineEntryResponse(
     IReadOnlyList<ReactionResponse> Reactions,
     int CommentCount);
 
-/// <summary>Cursor-paginated timeline response.</summary>
-public sealed record TimelineResponse(IReadOnlyList<TimelineEntryResponse> Items, string? NextCursor);
+/// <summary>One calendar day returned by a bloomed timeline.</summary>
+public sealed record TimelineDayResponse(DateOnly Date, IReadOnlyList<TimelineEntryResponse> Entries);
+
+/// <summary>Cursor-paginated timeline response grouped by complete days.</summary>
+public sealed record TimelineResponse(IReadOnlyList<TimelineDayResponse> Days, string? NextCursor);
 
 /// <summary>Reaction count for one emoji.</summary>
 public sealed record ReactionResponse(string EmojiCode, int Count, bool ReactedByCurrentUser);

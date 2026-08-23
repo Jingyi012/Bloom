@@ -98,8 +98,11 @@ public sealed record TimelineEntry(
     IReadOnlyList<ReactionSummary> Reactions,
     int CommentCount);
 
-/// <summary>A cursor page of timeline items.</summary>
-public sealed record TimelinePage(IReadOnlyList<TimelineEntry> Items, string? NextCursor);
+/// <summary>One calendar day in a bloomed timeline.</summary>
+public sealed record TimelineDay(DateOnly Date, IReadOnlyList<TimelineEntry> Entries);
+
+/// <summary>A cursor page of complete timeline days.</summary>
+public sealed record TimelinePage(IReadOnlyList<TimelineDay> Days, string? NextCursor);
 
 /// <summary>Reaction totals for a publication and emoji.</summary>
 public sealed record ReactionSummary(string EmojiCode, int Count, bool ReactedByCurrentUser);

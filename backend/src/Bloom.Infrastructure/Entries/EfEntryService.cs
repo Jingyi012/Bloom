@@ -21,7 +21,7 @@ public sealed class EfEntryService(
     IEntryProtector entryProtector) : IEntryService
 {
     private static readonly HashSet<string> AllowedReactionCodes = ["❤️", "😊", "😂", "😢", "🔥", "👏"];
-    private const int TimelinePageSize = 30;
+    private const int TimelineDayPageSize = 7;
     private const int CommentPageSize = 50;
     private readonly BloomDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
     private readonly IAuditStampWriter _auditStampWriter = auditStampWriter ?? throw new ArgumentNullException(nameof(auditStampWriter));
@@ -259,25 +259,31 @@ public sealed class EfEntryService(
         if (date is not null) query = query.Where(item => item.publication.AuthorLocalDate == date.Value);
         if (authorUserId is not null) query = query.Where(item => item.publication.AuthorUserId == authorUserId.Value);
         var state = DecodeCursor<TimelineCursor>(cursor);
-        if (state is not null)
-        {
-            query = query.Where(item => item.publication.AuthorLocalDate > state.Date
-                || (item.publication.AuthorLocalDate == state.Date && item.publication.SubmittedAtUtc > state.SubmittedAtUtc)
-                || (item.publication.AuthorLocalDate == state.Date && item.publication.SubmittedAtUtc == state.SubmittedAtUtc && item.publication.Id.CompareTo(state.PublicationId) > 0));
-        }
+        var dayQuery = query.Select(item => item.publication.AuthorLocalDate).Distinct();
+        if (state is not null) dayQuery = dayQuery.Where(day => day > state.Date);
 
-        var rows = await query.OrderBy(item => item.publication.AuthorLocalDate)
+        var pageDates = await dayQuery.OrderBy(day => day)
+            .Take(TimelineDayPageSize + 1)
+            .ToArrayAsync(cancellationToken).ConfigureAwait(false);
+        var hasNext = pageDates.Length > TimelineDayPageSize;
+        var selectedDates = pageDates.Take(TimelineDayPageSize).ToArray();
+        if (selectedDates.Length == 0) return new TimelinePage([], null);
+
+        var pageRows = await query
+            .Where(item => selectedDates.Contains(item.publication.AuthorLocalDate))
+            .OrderBy(item => item.publication.AuthorLocalDate)
             .ThenBy(item => item.publication.SubmittedAtUtc)
             .ThenBy(item => item.publication.Id)
-            .Take(TimelinePageSize + 1)
             .ToArrayAsync(cancellationToken).ConfigureAwait(false);
-        var hasNext = rows.Length > TimelinePageSize;
-        var pageRows = rows.Take(TimelinePageSize).ToArray();
         var entries = await ToTimelineEntriesAsync(pageRows, userId, cancellationToken).ConfigureAwait(false);
-        var nextCursor = hasNext && pageRows.Length > 0
-            ? EncodeCursor(new TimelineCursor(pageRows[^1].publication.AuthorLocalDate, pageRows[^1].publication.SubmittedAtUtc, pageRows[^1].publication.Id))
+        var days = entries.GroupBy(entry => entry.AuthorLocalDate)
+            .OrderBy(group => group.Key)
+            .Select(group => new TimelineDay(group.Key, group.ToArray()))
+            .ToArray();
+        var nextCursor = hasNext && days.Length > 0
+            ? EncodeCursor(new TimelineCursor(days[^1].Date))
             : null;
-        return new TimelinePage(entries, nextCursor);
+        return new TimelinePage(days, nextCursor);
     }
 
     /// <inheritdoc />
@@ -466,7 +472,7 @@ public sealed class EfEntryService(
 
     private static string EncodeCursor<T>(T cursor) => Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(cursor)));
 
-    private sealed record TimelineCursor(DateOnly Date, DateTimeOffset SubmittedAtUtc, Guid PublicationId);
+    private sealed record TimelineCursor(DateOnly Date);
     private sealed record CommentCursor(DateTimeOffset CreatedAtUtc, Guid CommentId);
     private sealed record EditablePublication(EntryPublication Publication, Circle Circle);
     private sealed record TodayEntryContext(DiaryEntry Entry, DateOnly LocalDate, DateTimeOffset ModificationEndsAtUtc, bool CanModify, IReadOnlyList<EditablePublication> Publications);
