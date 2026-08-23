@@ -37,6 +37,20 @@ public sealed class EfCircleService(
     }
 
     /// <inheritdoc />
+    public async Task<Circle?> UpdateAsync(Guid circleId, Guid userId, string name, string emoji, DateTimeOffset bloomAtUtc, string timeZoneId, CancellationToken cancellationToken)
+    {
+        var circle = await GetForUserAsync(circleId, userId, cancellationToken).ConfigureAwait(false);
+        if (circle is null) return null;
+        if (circle.CreatorUserId != userId)
+            throw new UnauthorizedAccessException("Only the circle creator can edit this circle.");
+        var now = _timeProvider.GetUtcNow();
+        circle.Update(name, emoji, bloomAtUtc, timeZoneId, now);
+        _auditStampWriter.StampModified(circle, userId);
+        await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return circle;
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<Circle>> ListForUserAsync(Guid userId, CancellationToken cancellationToken)
     {
         var circles = await _db.Circles

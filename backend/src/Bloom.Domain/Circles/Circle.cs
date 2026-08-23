@@ -69,6 +69,20 @@ public sealed class Circle : AuditableEntity
     /// <summary>Gets whether the user is an active member.</summary>
     public bool HasActiveMember(Guid userId) => _members.Any(member => member.UserId == userId && member.LeftAtUtc is null);
 
+    /// <summary>Updates creator-controlled circle details before the circle blooms.</summary>
+    public void Update(string name, string emoji, DateTimeOffset bloomAtUtc, string timeZoneId, DateTimeOffset nowUtc)
+    {
+        if (GetCurrentStatus(nowUtc) == CircleStatus.Bloomed)
+            throw new InvalidOperationException("A bloomed circle cannot be edited.");
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(timeZoneId);
+        if (bloomAtUtc <= nowUtc) throw new ArgumentException("Bloom time must be in the future.", nameof(bloomAtUtc));
+        Name = name.Trim();
+        Emoji = string.IsNullOrWhiteSpace(emoji) ? "ðŸŒ±" : emoji.Trim();
+        BloomAtUtc = bloomAtUtc.ToUniversalTime();
+        TimeZoneId = timeZoneId.Trim();
+    }
+
     /// <summary>Gets a member by user identifier.</summary>
     public CircleMember? FindMember(Guid userId) => _members.FirstOrDefault(member => member.UserId == userId);
 

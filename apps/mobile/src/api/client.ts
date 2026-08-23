@@ -4,6 +4,7 @@ import type {
   CircleInvitation,
   CircleSummary,
   CreateCircleRequest,
+  UpdateCircleRequest,
   CurrentUserResponse,
   EntrySubmissionRequest,
   EntrySubmissionResponse,
@@ -86,6 +87,11 @@ export const bloomApi = {
     headers: { Authorization: `Bearer ${accessToken}` },
   }),
   getCircle: (accessToken: string, circleId: string) => requestJson<CircleDetail>(`/circles/${circleId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  updateCircle: (accessToken: string, circleId: string, request: UpdateCircleRequest) => requestJson<CircleDetail>(`/circles/${circleId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(request),
     headers: { Authorization: `Bearer ${accessToken}` },
   }),
   listCircleInvitations: (accessToken: string) => requestJson<CircleInvitation[]>('/circles/invitations', {

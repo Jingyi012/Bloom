@@ -74,6 +74,8 @@ export type CreateCircleRequest = {
   timeZoneId: string;
 };
 
+export type UpdateCircleRequest = CreateCircleRequest;
+
 export type InviteCircleMemberRequest = {
   email: string;
 };

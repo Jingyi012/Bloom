@@ -8,6 +8,13 @@ public sealed record CreateCircleRequest(
     string TimeZoneId,
     int? DurationMonths = null);
 
+/// <summary>Request to update creator-controlled circle details before bloom.</summary>
+public sealed record UpdateCircleRequest(
+    string Name,
+    string Emoji,
+    DateTimeOffset BloomAtUtc,
+    string TimeZoneId);
+
 /// <summary>Request to invite an existing Bloom user.</summary>
 public sealed record InviteCircleMemberRequest(string Email);
 

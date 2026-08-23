@@ -70,6 +70,29 @@ public sealed class CirclesController(
         return circle is null ? NotFound() : Ok(await ToDetailAsync(circle, userId, cancellationToken).ConfigureAwait(false));
     }
 
+    /// <summary>Updates creator-controlled details for a circle before it blooms.</summary>
+    [HttpPatch("{circleId:guid}")]
+    [ProducesResponseType(typeof(CircleDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<CircleDetailResponse>> UpdateAsync(Guid circleId, UpdateCircleRequest request, CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        if (request is null || string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.TimeZoneId))
+            return BadRequest("Name and time zone are required.");
+        try
+        {
+            var circle = await _circleService.UpdateAsync(circleId, userId, request.Name, request.Emoji, request.BloomAtUtc, request.TimeZoneId, cancellationToken).ConfigureAwait(false);
+            return circle is null ? NotFound() : Ok(await ToDetailAsync(circle, userId, cancellationToken).ConfigureAwait(false));
+        }
+        catch (UnauthorizedAccessException exception) { return StatusCode(StatusCodes.Status403Forbidden, exception.Message); }
+        catch (ArgumentException exception) { return BadRequest(exception.Message); }
+        catch (InvalidOperationException exception) { return Conflict(exception.Message); }
+    }
+
     /// <summary>Invites an existing Bloom user.</summary>
     [HttpPost("{circleId:guid}/invitations")]
     public async Task<ActionResult> InviteAsync(Guid circleId, InviteCircleMemberRequest request, CancellationToken cancellationToken)
