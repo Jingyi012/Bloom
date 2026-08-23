@@ -76,7 +76,11 @@ public sealed class EfGoogleUserService(
     public async Task<UserStats> GetStatsAsync(Guid userId, CancellationToken cancellationToken)
     {
         var totalEntries = await _db.DiaryEntries.CountAsync(entry => entry.AuthorUserId == userId && entry.DeletedAtUtc == null, cancellationToken).ConfigureAwait(false);
-        var memberships = await _db.CircleMembers.AsNoTracking().Where(member => member.UserId == userId && member.LeftAtUtc == null).Join(_db.Circles.AsNoTracking(), member => member.CircleId, circle => circle.Id, (_, circle) => circle.BloomAtUtc).ToArrayAsync(cancellationToken).ConfigureAwait(false);
+        var memberships = await _db.CircleMembers.AsNoTracking()
+            .Where(member => member.UserId == userId && member.LeftAtUtc == null)
+            .Join(_db.Circles.AsNoTracking().Where(circle => circle.Status != CircleStatus.Archived), member => member.CircleId, circle => circle.Id, (_, circle) => circle.BloomAtUtc)
+            .ToArrayAsync(cancellationToken)
+            .ConfigureAwait(false);
         var now = DateTimeOffset.UtcNow;
         return new UserStats(totalEntries, memberships.Length, memberships.Count(bloomAt => bloomAt <= now), 0);
     }
