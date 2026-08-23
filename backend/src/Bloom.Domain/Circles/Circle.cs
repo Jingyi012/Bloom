@@ -83,6 +83,14 @@ public sealed class Circle : AuditableEntity
         TimeZoneId = timeZoneId.Trim();
     }
 
+    /// <summary>Archives a sealed circle while preserving its audit history.</summary>
+    public void Archive(DateTimeOffset nowUtc)
+    {
+        if (GetCurrentStatus(nowUtc) == CircleStatus.Bloomed)
+            throw new InvalidOperationException("A bloomed circle cannot be deleted.");
+        Status = CircleStatus.Archived;
+    }
+
     /// <summary>Gets a member by user identifier.</summary>
     public CircleMember? FindMember(Guid userId) => _members.FirstOrDefault(member => member.UserId == userId);
 

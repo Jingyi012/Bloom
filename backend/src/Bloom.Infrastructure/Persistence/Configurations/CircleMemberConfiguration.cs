@@ -15,6 +15,7 @@ public sealed class CircleMemberConfiguration : IEntityTypeConfiguration<CircleM
         builder.Property(entity => entity.Role).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.HasIndex(entity => new { entity.CircleId, entity.UserId }).IsUnique();
         builder.HasIndex(entity => new { entity.UserId, entity.LeftAtUtc });
+        builder.HasOne<Circle>().WithMany().HasForeignKey(entity => entity.CircleId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<User>().WithMany().HasForeignKey(entity => entity.UserId).OnDelete(DeleteBehavior.Restrict);
     }
 }

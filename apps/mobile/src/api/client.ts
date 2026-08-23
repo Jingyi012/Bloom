@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import type {
   CircleDetail,
+  CircleDeleteResponse,
   CircleInvitation,
   CircleSummary,
   CreateCircleRequest,
@@ -92,6 +93,10 @@ export const bloomApi = {
   updateCircle: (accessToken: string, circleId: string, request: UpdateCircleRequest) => requestJson<CircleDetail>(`/circles/${circleId}`, {
     method: 'PATCH',
     body: JSON.stringify(request),
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }),
+  deleteCircle: (accessToken: string, circleId: string) => requestJson<CircleDeleteResponse>(`/circles/${circleId}`, {
+    method: 'DELETE',
     headers: { Authorization: `Bearer ${accessToken}` },
   }),
   listCircleInvitations: (accessToken: string) => requestJson<CircleInvitation[]>('/circles/invitations', {

@@ -35,4 +35,7 @@ public sealed class CircleInvitation : AuditableEntity
 
     /// <summary>Declines the invitation.</summary>
     public void Decline() => Status = CircleInvitationStatus.Declined;
+
+    /// <summary>Cancels a pending invitation when its circle is archived.</summary>
+    public void Cancel() => Status = CircleInvitationStatus.Cancelled;
 }

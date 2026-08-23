@@ -76,6 +76,10 @@ export type CreateCircleRequest = {
 
 export type UpdateCircleRequest = CreateCircleRequest;
 
+export type CircleDeleteResponse = {
+  wasArchived: boolean;
+};
+
 export type InviteCircleMemberRequest = {
   email: string;
 };

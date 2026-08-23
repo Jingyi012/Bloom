@@ -93,6 +93,25 @@ public sealed class CirclesController(
         catch (InvalidOperationException exception) { return Conflict(exception.Message); }
     }
 
+    /// <summary>Deletes an empty sealed circle or archives one containing publications.</summary>
+    [HttpDelete("{circleId:guid}")]
+    [ProducesResponseType(typeof(CircleDeleteResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<CircleDeleteResponse>> DeleteAsync(Guid circleId, CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        try
+        {
+            var result = await _circleService.DeleteAsync(circleId, userId, cancellationToken).ConfigureAwait(false);
+            return result is null ? NotFound() : Ok(new CircleDeleteResponse(result.WasArchived));
+        }
+        catch (UnauthorizedAccessException exception) { return StatusCode(StatusCodes.Status403Forbidden, exception.Message); }
+        catch (InvalidOperationException exception) { return Conflict(exception.Message); }
+    }
+
     /// <summary>Invites an existing Bloom user.</summary>
     [HttpPost("{circleId:guid}/invitations")]
     public async Task<ActionResult> InviteAsync(Guid circleId, InviteCircleMemberRequest request, CancellationToken cancellationToken)

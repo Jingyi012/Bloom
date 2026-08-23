@@ -15,6 +15,9 @@ public sealed record UpdateCircleRequest(
     DateTimeOffset BloomAtUtc,
     string TimeZoneId);
 
+/// <summary>Describes whether a circle was deleted or archived.</summary>
+public sealed record CircleDeleteResponse(bool WasArchived);
+
 /// <summary>Request to invite an existing Bloom user.</summary>
 public sealed record InviteCircleMemberRequest(string Email);
 

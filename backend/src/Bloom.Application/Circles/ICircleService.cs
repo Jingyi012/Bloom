@@ -11,6 +11,9 @@ public interface ICircleService
     /// <summary>Updates creator-controlled details for a circle that has not bloomed.</summary>
     Task<Circle?> UpdateAsync(Guid circleId, Guid userId, string name, string emoji, DateTimeOffset bloomAtUtc, string timeZoneId, CancellationToken cancellationToken);
 
+    /// <summary>Deletes an empty sealed circle or archives one that already contains publications.</summary>
+    Task<CircleDeletionResult?> DeleteAsync(Guid circleId, Guid userId, CancellationToken cancellationToken);
+
     /// <summary>Lists circles in which the user is an active member.</summary>
     Task<IReadOnlyList<Circle>> ListForUserAsync(Guid userId, CancellationToken cancellationToken);
 
@@ -32,3 +35,6 @@ public interface ICircleService
     /// <summary>Leaves a circle and withdraws future access.</summary>
     Task<bool> LeaveAsync(Guid circleId, Guid userId, CancellationToken cancellationToken);
 }
+
+/// <summary>Describes how a circle deletion was applied.</summary>
+public sealed record CircleDeletionResult(bool WasArchived);

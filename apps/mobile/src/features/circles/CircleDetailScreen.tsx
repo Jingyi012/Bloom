@@ -45,6 +45,9 @@ export default function CircleDetailScreen() {
   const [editBloomAt, setEditBloomAt] = useState(new Date());
   const [editPickerMode, setEditPickerMode] = useState<"date" | "time" | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showDeleteSheet, setShowDeleteSheet] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const load = useCallback(
     async (refresh = false) => {
@@ -109,6 +112,27 @@ export default function CircleDetailScreen() {
     },
     [],
   );
+
+  const openDeleteSheet = useCallback(() => {
+    if (!detail || !detail.circle.isCreator || detail.circle.status === "Bloomed") return;
+    setDeleteConfirmation("");
+    setShowDeleteSheet(true);
+  }, [detail]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!session?.accessToken || !circleId || !detail || deleteConfirmation.trim() !== detail.circle.name.trim()) return;
+    setIsDeleting(true);
+    setError(null);
+    try {
+      await bloomApi.deleteCircle(session.accessToken, circleId);
+      setShowDeleteSheet(false);
+      router.back();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : t("circleSaveFailed"));
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [circleId, deleteConfirmation, detail, router, session?.accessToken, t]);
 
   const progress = useMemo(() => {
     if (!detail) return 0;
@@ -330,6 +354,11 @@ export default function CircleDetailScreen() {
           <Text style={styles.dangerText}>{t("leaveCircle")}</Text>
         </Pressable>
       ) : null}
+      {circle.isCreator && circle.status !== "Bloomed" ? (
+        <Pressable accessibilityRole="button" disabled={isBusy || isDeleting} onPress={openDeleteSheet} style={styles.danger}>
+          <Text style={styles.dangerText}>{t("deleteCircle")}</Text>
+        </Pressable>
+      ) : null}
       <Modal animationType="slide" onRequestClose={() => setShowEditSheet(false)} transparent visible={showEditSheet}>
         <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => setShowEditSheet(false)} style={styles.sheetBackdrop}>
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.sheet}>
@@ -376,6 +405,25 @@ export default function CircleDetailScreen() {
             ) : null}
             <Pressable accessibilityRole="button" disabled={isSaving || !editName.trim()} onPress={() => void saveCircle()} style={[styles.saveButton, isSaving ? styles.saveButtonDisabled : null]}>
               {isSaving ? <ActivityIndicator color={colors.card} /> : <Text style={styles.saveButtonText}>{t("saveCircle")}</Text>}
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+      <Modal animationType="slide" onRequestClose={() => setShowDeleteSheet(false)} transparent visible={showDeleteSheet}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => setShowDeleteSheet(false)} style={styles.sheetBackdrop}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>{t("deleteCircleTitle")}</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => setShowDeleteSheet(false)}>
+                <Text style={styles.sheetClose}>×</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.confirmBody}>{t("deleteCircleBody")}</Text>
+            <Text style={styles.label}>{t("deleteCircleConfirmName")}</Text>
+            <TextInput autoCapitalize="none" onChangeText={setDeleteConfirmation} placeholder={circle.name} placeholderTextColor={colors.inkSoft} style={styles.input} value={deleteConfirmation} />
+            <Pressable accessibilityRole="button" disabled={isDeleting || deleteConfirmation.trim() !== circle.name.trim()} onPress={() => void confirmDelete()} style={[styles.deleteButton, isDeleting || deleteConfirmation.trim() !== circle.name.trim() ? styles.saveButtonDisabled : null]}>
+              {isDeleting ? <ActivityIndicator color={colors.card} /> : <Text style={styles.deleteButtonText}>{t("deleteCircle")}</Text>}
             </Pressable>
           </Pressable>
         </Pressable>

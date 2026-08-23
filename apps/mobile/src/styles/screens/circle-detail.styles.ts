@@ -57,4 +57,7 @@ export const circleDetailStyles = StyleSheet.create({
   saveButton: { alignItems: 'center', backgroundColor: colors.coral, borderRadius: 15, justifyContent: 'center', marginTop: spacing.xl, minHeight: 50 },
   saveButtonDisabled: { opacity: 0.6 },
   saveButtonText: { color: colors.card, fontFamily: typography.uiBold, fontSize: 14 },
+  confirmBody: { color: colors.inkSoft, fontSize: 14, lineHeight: 21 },
+  deleteButton: { alignItems: 'center', backgroundColor: colors.coralDark, borderRadius: 15, justifyContent: 'center', marginTop: spacing.xl, minHeight: 50 },
+  deleteButtonText: { color: colors.card, fontFamily: typography.uiBold, fontSize: 14 },
 });
