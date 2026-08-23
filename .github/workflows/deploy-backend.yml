@@ -62,6 +62,9 @@ jobs:
     env:
       DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
       IMAGE_OWNER: ${{ vars.IMAGE_OWNER }}
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+      VPS_USER: ${{ secrets.VPS_USER }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -103,27 +106,31 @@ jobs:
 
       - name: Configure SSH
         run: |
-          if [ -z "${{ secrets.VPS_HOST }}" ] || [ -z "${{ secrets.VPS_PORT }}" ] || [ -z "${{ secrets.VPS_USER }}" ] || [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
-            echo "Required secrets: VPS_HOST, VPS_PORT, VPS_USER, VPS_SSH_KEY"
+          if [ -z "${VPS_HOST}" ] || [ -z "${VPS_USER}" ] || [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
+            echo "Required secrets: VPS_HOST, VPS_USER, VPS_SSH_KEY"
+            exit 1
+          fi
+          if ! [[ "${VPS_PORT}" =~ ^[0-9]+$ ]] || [ "${VPS_PORT}" -lt 1 ] || [ "${VPS_PORT}" -gt 65535 ]; then
+            echo "VPS_PORT must be a valid TCP port (default: 22)."
             exit 1
           fi
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -T 10 -p "${{ secrets.VPS_PORT }}" -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -T 10 -p "${VPS_PORT}" -H "${VPS_HOST}" >> ~/.ssh/known_hosts
 
       - name: Upload deployment manifest
         run: |
-          ssh -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+          ssh -p "${VPS_PORT}" "${VPS_USER}@${VPS_HOST}" \
             "mkdir -p '${DEPLOY_PATH}'"
-          scp -P "${{ secrets.VPS_PORT }}" backend/deploy/docker-compose.yml \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${DEPLOY_PATH}/docker-compose.yml"
-          scp -P "${{ secrets.VPS_PORT }}" backend/deploy/.env.example \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${DEPLOY_PATH}/.env.example"
+          scp -P "${VPS_PORT}" backend/deploy/docker-compose.yml \
+            "${VPS_USER}@${VPS_HOST}:${DEPLOY_PATH}/docker-compose.yml"
+          scp -P "${VPS_PORT}" backend/deploy/.env.example \
+            "${VPS_USER}@${VPS_HOST}:${DEPLOY_PATH}/.env.example"
 
       - name: Pull and restart backend
         run: |
-          ssh -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" 'bash -s' -- "${DEPLOY_PATH}" "${RESOLVED_IMAGE_OWNER}" <<'EOF'
+          ssh -p "${VPS_PORT}" "${VPS_USER}@${VPS_HOST}" 'bash -s' -- "${DEPLOY_PATH}" "${RESOLVED_IMAGE_OWNER}" <<'EOF'
           set -euo pipefail
           deploy_path="$1"
           image_owner="$2"
@@ -134,12 +141,25 @@ jobs:
           set -a
           . ./.env
           set +a
+          for required_name in Bloom__SessionIssuer Bloom__SessionSigningKey Bloom__AccessTokenMinutes Bloom__RefreshTokenDays POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DATA_PATH BLOOM_UPLOADS_PATH BACKEND_IMAGE_TAG ASPNETCORE_ENVIRONMENT ASPNETCORE_URLS ImageStorage__RootPath Bloom__ApplyMigrationsOnStartup API_BIND_HOST API_HOST_PORT DB_BIND_HOST DB_HOST_PORT; do
+            if [ -z "${!required_name:-}" ]; then
+              echo "${required_name} is required in ${deploy_path}/.env"
+              exit 1
+            fi
+          done
+          if [ -z "${Google__IosClientId:-}" ] && [ -z "${Google__AndroidClientId:-}" ] && [ -z "${Google__WebClientId:-}" ]; then
+            echo "At least one Google OAuth client ID is required in ${deploy_path}/.env"
+            exit 1
+          fi
           test -n "${BLOOM_UPLOADS_PATH:-}" || { echo "BLOOM_UPLOADS_PATH is required in .env"; exit 1; }
           case "${BLOOM_UPLOADS_PATH}" in /*) ;; *) echo "BLOOM_UPLOADS_PATH must be absolute"; exit 1 ;; esac
           mkdir -p "${BLOOM_UPLOADS_PATH}"
+          test -n "${POSTGRES_DATA_PATH:-}" || { echo "POSTGRES_DATA_PATH is required in .env"; exit 1; }
+          case "${POSTGRES_DATA_PATH}" in /*) ;; *) echo "POSTGRES_DATA_PATH must be absolute"; exit 1 ;; esac
+          mkdir -p "${POSTGRES_DATA_PATH}"
 
-          IMAGE_OWNER="${image_owner}" BACKEND_IMAGE_TAG=latest docker compose pull db api
-          IMAGE_OWNER="${image_owner}" BACKEND_IMAGE_TAG=latest docker compose up -d db api
+          IMAGE_OWNER="${image_owner}" docker compose pull db api
+          IMAGE_OWNER="${image_owner}" docker compose up -d db api
 
           api_container_id="$(docker compose ps -q api)"
           test -n "${api_container_id}" || { docker compose ps -a; exit 1; }

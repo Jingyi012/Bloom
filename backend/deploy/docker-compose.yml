@@ -3,37 +3,34 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: bloom
-      POSTGRES_USER: bloom
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - bloom_db:/var/lib/postgresql/data
+      - "${POSTGRES_DATA_PATH}:/var/lib/postgresql/data"
+    ports:
+      - "${DB_BIND_HOST}:${DB_HOST_PORT}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bloom -d bloom"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 20
 
   api:
-    image: ghcr.io/${IMAGE_OWNER}/bloom-backend:${BACKEND_IMAGE_TAG:-latest}
+    image: ghcr.io/${IMAGE_OWNER}/bloom-backend:${BACKEND_IMAGE_TAG}
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      ASPNETCORE_ENVIRONMENT: Production
-      ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__BloomDb: Host=db;Port=5432;Database=bloom;Username=bloom;Password=${POSTGRES_PASSWORD}
-      ImageStorage__RootPath: /data/uploads
-      Bloom__ApplyMigrationsOnStartup: ${BLOOM_APPLY_MIGRATIONS_ON_STARTUP:-false}
+      ConnectionStrings__BloomDb: Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
     ports:
-      - "127.0.0.1:${API_HOST_PORT:-18080}:8080"
+      - "${API_BIND_HOST}:${API_HOST_PORT}:8080"
     volumes:
-      - ${BLOOM_UPLOADS_PATH:-./uploads}:/data/uploads
+      - ${BLOOM_UPLOADS_PATH}:/data/uploads
       - bloom_keys:/app/App_Data/keys
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
-  bloom_db:
   bloom_keys:

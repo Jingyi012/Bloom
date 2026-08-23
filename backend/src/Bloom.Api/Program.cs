@@ -25,7 +25,11 @@ builder.Services
 builder.Services
     .AddOptions<GoogleOptions>()
     .Bind(builder.Configuration.GetSection(GoogleOptions.SectionName))
-    .ValidateDataAnnotations()
+    .Validate(options =>
+        !string.IsNullOrWhiteSpace(options.IosClientId)
+        || !string.IsNullOrWhiteSpace(options.AndroidClientId)
+        || !string.IsNullOrWhiteSpace(options.WebClientId),
+        "At least one Google OAuth client ID must be configured.")
     .ValidateOnStart();
 builder.Services
     .AddOptions<BloomOptions>()
@@ -40,7 +44,6 @@ builder.Services.AddScoped<ISessionTokenService, SessionTokenService>();
 var googleOptions = builder.Configuration.GetSection(GoogleOptions.SectionName).Get<GoogleOptions>() ?? new GoogleOptions();
 var googleClientIds = new[]
     {
-        googleOptions.ClientId,
         googleOptions.IosClientId,
         googleOptions.AndroidClientId,
         googleOptions.WebClientId,
