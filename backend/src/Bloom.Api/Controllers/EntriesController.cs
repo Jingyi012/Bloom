@@ -2,8 +2,10 @@ using System.Security.Claims;
 using Bloom.Application.Entries;
 using Bloom.Application.Media;
 using Bloom.Contracts.Entries;
+using Bloom.Infrastructure.Media;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace Bloom.Api.Controllers;
 
@@ -11,9 +13,12 @@ namespace Bloom.Api.Controllers;
 [ApiController]
 [Route("api/v1/entries")]
 [Authorize]
-public sealed class EntriesController(IEntryService entryService) : ControllerBase
+public sealed class EntriesController(IEntryService entryService, IOptions<ImageStorageOptions> imageStorageOptions) : ControllerBase
 {
     private readonly IEntryService _entryService = entryService ?? throw new ArgumentNullException(nameof(entryService));
+    private readonly long _maxImageBytes = imageStorageOptions?.Value.MaxBytes > 0
+        ? imageStorageOptions.Value.MaxBytes
+        : throw new ArgumentException("Image storage size limit must be configured.", nameof(imageStorageOptions));
 
     /// <summary>Gets the current user's sealed-entry status for today.</summary>
     [HttpGet("today")]
@@ -139,6 +144,10 @@ public sealed class EntriesController(IEntryService entryService) : ControllerBa
         if (!TryGetUserId(out var userId)) return Unauthorized();
         if (images is null || images.Count == 0) return BadRequest("At least one image is required.");
         if (images.Count > 10) return BadRequest("You can attach up to 10 images.");
+        if (images.Any(image => image.Length <= 0 || image.Length > _maxImageBytes))
+        {
+            return BadRequest($"Each image must be between 1 and {_maxImageBytes / (1024 * 1024)} MB.");
+        }
         Guid[] parsedCircleIds;
         try { parsedCircleIds = circleIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Guid.Parse).ToArray(); }
         catch (FormatException) { return BadRequest("Circle ids are invalid."); }

@@ -28,6 +28,27 @@ const apiUrl =
   process.env.EXPO_PUBLIC_API_URL ??
   "http://127.0.0.1:5052/api/v1";
 
+async function getApiErrorMessage(response: Response): Promise<string> {
+  const fallback = `Bloom API request failed (${response.status})`;
+  const body = await response.text();
+  if (!body) return fallback;
+
+  try {
+    const payload = JSON.parse(body) as unknown;
+    if (typeof payload === "string") return payload;
+    if (payload && typeof payload === "object") {
+      const record = payload as Record<string, unknown>;
+      for (const key of ["detail", "message", "title", "error"]) {
+        if (typeof record[key] === "string" && record[key]) return record[key] as string;
+      }
+    }
+  } catch {
+    // Some API validation responses are plain text rather than JSON.
+  }
+
+  return body.trim() || fallback;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiUrl}${path}`, {
     ...init,
@@ -38,9 +59,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
 
-  if (!response.ok) {
-    throw new Error(`Bloom API request failed (${response.status})`);
-  }
+  if (!response.ok) throw new Error(await getApiErrorMessage(response));
 
   return response.status === 204
     ? (undefined as T)
@@ -60,8 +79,7 @@ async function requestMultipart<T>(
       Authorization: `Bearer ${accessToken}`,
     },
   });
-  if (!response.ok)
-    throw new Error(`Bloom API request failed (${response.status})`);
+  if (!response.ok) throw new Error(await getApiErrorMessage(response));
   return response.status === 204
     ? (undefined as T)
     : ((await response.json()) as T);

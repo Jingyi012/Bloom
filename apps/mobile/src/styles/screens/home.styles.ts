@@ -40,7 +40,7 @@ export const homeStyles = StyleSheet.create({
     fontSize: 12,
     marginTop: spacing.lg,
   },
-  error: { color: colors.coralDark, fontSize: 13, marginTop: spacing.md },
+  error: { color: colors.coralDark, fontFamily: typography.ui, fontSize: 13, marginTop: spacing.md },
   loading: { alignItems: "center", minHeight: 180, justifyContent: "center" },
   statsRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
   stat: {

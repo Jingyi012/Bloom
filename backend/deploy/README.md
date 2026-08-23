@@ -1,13 +1,15 @@
 # Bloom backend deployment
 
-The API stores image bytes on the filesystem and stores only media metadata and
-the relative file path in PostgreSQL. Set `BLOOM_UPLOADS_PATH` in the server's
-private `deploy/.env` file to the host folder that should contain uploads.
+The API stores image files on the filesystem and stores only media metadata and
+the relative file path in PostgreSQL. New files keep their original `.jpg`,
+`.png`, or `.webp` extension. Set `BLOOM_UPLOADS_PATH` in the server's private
+`deploy/.env` file to the host folder that should contain uploads.
 
 The compose file mounts that folder at `/data/uploads` and sets
 `ImageStorage:RootPath` to `/data/uploads`. It also persists ASP.NET Data
 Protection keys in the `bloom_keys` Docker volume; those keys must survive
-container replacement because uploaded files are protected at rest.
+container replacement because diary text and other protected application data
+depend on those keys.
 
 Deployment steps on a server:
 

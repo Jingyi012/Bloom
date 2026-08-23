@@ -27,7 +27,7 @@ public interface IEntryService
         IReadOnlyCollection<Guid> circleIds,
         CancellationToken cancellationToken);
 
-    /// <summary>Submits an entry and stores encrypted local images owned by the diary entry.</summary>
+    /// <summary>Submits an entry and stores local images owned by the diary entry.</summary>
     Task<EntrySubmissionResult> SubmitWithMediaAsync(
         Guid authorUserId,
         string clientEntryId,

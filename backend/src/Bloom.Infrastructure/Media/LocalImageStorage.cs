@@ -1,20 +1,23 @@
 using System.Security.Cryptography;
 using System.Text;
 using Bloom.Application.Media;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 
 namespace Bloom.Infrastructure.Media;
 
-/// <summary>Stores protected image bytes beneath the configured image-storage root.</summary>
+/// <summary>Stores image files beneath the configured image-storage root.</summary>
 public sealed class LocalImageStorage(
     IOptions<ImageStorageOptions> options,
-    IDataProtectionProvider dataProtectionProvider,
     TimeProvider timeProvider) : IImageStorage
 {
     private static readonly HashSet<string> AllowedContentTypes = ["image/jpeg", "image/png", "image/webp"];
+    private static readonly IReadOnlyDictionary<string, string> FileExtensions = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["image/jpeg"] = ".jpg",
+        ["image/png"] = ".png",
+        ["image/webp"] = ".webp",
+    };
     private readonly ImageStorageOptions _options = GetOptions(options);
-    private readonly IDataProtector _protector = (dataProtectionProvider ?? throw new ArgumentNullException(nameof(dataProtectionProvider))).CreateProtector("Bloom.Images.v1");
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     private readonly string _rootPath = ResolveRootPath(GetOptions(options).RootPath);
 
@@ -29,25 +32,24 @@ public sealed class LocalImageStorage(
         if (memory.Length == 0 || memory.Length > _options.MaxBytes) throw new InvalidOperationException("The image is empty or too large.");
         var bytes = memory.ToArray();
         ValidateSignature(bytes, contentType);
-        var protectedBytes = _protector.Protect(bytes);
         var now = _timeProvider.GetUtcNow();
         var mediaId = Guid.NewGuid();
-        var relativePath = Path.Combine(ownerUserId.ToString("N"), now.Year.ToString(), now.Month.ToString("00"), $"{mediaId:N}.bin").Replace('\\', '/');
+        var extension = FileExtensions[contentType];
+        var relativePath = Path.Combine(ownerUserId.ToString("N"), now.Year.ToString(), now.Month.ToString("00"), $"{mediaId:N}{extension}").Replace('\\', '/');
         var fullPath = GetSafePath(relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         var temporaryPath = $"{fullPath}.{Guid.NewGuid():N}.tmp";
-        await File.WriteAllBytesAsync(temporaryPath, protectedBytes, cancellationToken).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(temporaryPath, bytes, cancellationToken).ConfigureAwait(false);
         File.Move(temporaryPath, fullPath);
-        var digest = Convert.ToHexString(SHA256.HashData(protectedBytes));
-        return new StoredImage(relativePath, contentType, protectedBytes.LongLength, digest);
+        var digest = Convert.ToHexString(SHA256.HashData(bytes));
+        return new StoredImage(relativePath, contentType, bytes.LongLength, digest);
     }
 
     /// <inheritdoc />
     public async Task<byte[]> ReadAsync(string relativePath, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
-        var protectedBytes = await File.ReadAllBytesAsync(GetSafePath(relativePath), cancellationToken).ConfigureAwait(false);
-        return _protector.Unprotect(protectedBytes);
+        return await File.ReadAllBytesAsync(GetSafePath(relativePath), cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

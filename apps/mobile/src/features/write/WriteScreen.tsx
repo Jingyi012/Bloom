@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { Image } from "expo-image";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Screen } from "@/components/Screen";
@@ -66,7 +67,23 @@ function getPhotoIdentity(asset: ImagePicker.ImagePickerAsset): string {
   return `uri:${asset.uri}`;
 }
 
+async function normalizeSelectedImage(asset: ImagePicker.ImagePickerAsset): Promise<string> {
+  const maxDimension = Math.max(asset.width, asset.height);
+  const context = ImageManipulator.manipulate(asset.uri);
+  if (maxDimension > 2048) {
+    if (asset.width >= asset.height) context.resize({ width: 2048 });
+    else context.resize({ height: 2048 });
+  }
+  const rendered = await context.renderAsync();
+  const saved = await rendered.saveAsync({
+    compress: 0.8,
+    format: SaveFormat.JPEG,
+  });
+  return saved.uri;
+}
+
 export default function WriteScreen() {
+  const router = useRouter();
   const { session, user } = useAuth();
   const { t } = useSettings();
   const [circles, setCircles] = useState<CircleSummary[]>([]);
@@ -100,9 +117,7 @@ export default function WriteScreen() {
       setCircles(result.filter((circle) => circle.status === "Sealed"));
     } catch (loadError) {
       setError(
-        loadError instanceof Error
-          ? loadError.message
-          : t("circleLoadFailed"),
+        loadError instanceof Error ? loadError.message : t("circleLoadFailed"),
       );
     } finally {
       setIsLoading(false);
@@ -163,8 +178,7 @@ export default function WriteScreen() {
           restoredImageUris.map((uri) => [uri, `uri:${uri}`]),
         );
         setImageUris(restoredImageUris);
-        if (draft.text || draft.imageUris?.length)
-          setNotice(t("restoreDraft"));
+        if (draft.text || draft.imageUris?.length) setNotice(t("restoreDraft"));
       }
       setIsDraftReady(true);
     });
@@ -204,13 +218,21 @@ export default function WriteScreen() {
     t,
   ]);
 
-  const selectedCount = useMemo(
-    () => selectedCircleIds.length,
-    [selectedCircleIds.length],
+  const selectedAvailableCircleIds = useMemo(
+    () => selectedCircleIds.filter((id) => circles.some((circle) => circle.id === id)),
+    [circles, selectedCircleIds],
   );
+  const selectedCount = selectedAvailableCircleIds.length;
   const allCirclesSelected =
     circles.length > 0 &&
     circles.every((circle) => selectedCircleIds.includes(circle.id));
+  const canSubmit =
+    Boolean(session?.accessToken) &&
+    !isSubmitting &&
+    !isTodayStatusLoading &&
+    Boolean(text.trim()) &&
+    (isEditingToday || selectedAvailableCircleIds.length > 0) &&
+    (isEditingToday || !todayStatus?.hasEntry);
 
   const toggleCircle = useCallback((circleId: string) => {
     setSelectedCircleIds((current) =>
@@ -255,38 +277,49 @@ export default function WriteScreen() {
   }, [todayStatus]);
 
   const deleteToday = useCallback(() => {
-    if (!session?.accessToken || !todayStatus?.hasEntry || !todayStatus.canModify) return;
+    if (
+      !session?.accessToken ||
+      !todayStatus?.hasEntry ||
+      !todayStatus.canModify
+    )
+      return;
     Alert.alert(t("deleteTodayTitle"), t("deleteTodayBody"), [
       { text: t("cancel"), style: "cancel" },
       {
         text: t("deleteToday"),
         style: "destructive",
-        onPress: () => void (async () => {
-          try {
-            setIsSubmitting(true);
-            await bloomApi.deleteTodayEntry(session.accessToken);
-            setIsEditingToday(false);
-            await clearEditor();
-            await loadTodayStatus();
-            setNotice(t("todayDeleted"));
-          } catch (deleteError) {
-            setError(deleteError instanceof Error ? deleteError.message : t("todayStatusLoadFailed"));
-          } finally {
-            setIsSubmitting(false);
-          }
-        })(),
+        onPress: () =>
+          void (async () => {
+            try {
+              setIsSubmitting(true);
+              await bloomApi.deleteTodayEntry(session.accessToken);
+              setIsEditingToday(false);
+              await clearEditor();
+              await loadTodayStatus();
+              setNotice(t("todayDeleted"));
+            } catch (deleteError) {
+              setError(
+                deleteError instanceof Error
+                  ? deleteError.message
+                  : t("todayStatusLoadFailed"),
+              );
+            } finally {
+              setIsSubmitting(false);
+            }
+          })(),
       },
     ]);
   }, [clearEditor, loadTodayStatus, session?.accessToken, t, todayStatus]);
 
   const submit = useCallback(async () => {
     if (!session?.accessToken) return;
-    if (isTodayStatusLoading || (todayStatus?.hasEntry && !isEditingToday)) return;
+    if (isTodayStatusLoading || (todayStatus?.hasEntry && !isEditingToday))
+      return;
     if (!text.trim()) {
       setError(t("writeBeforeSealing"));
       return;
     }
-    if (selectedCircleIds.length === 0) {
+    if (!isEditingToday && selectedAvailableCircleIds.length === 0) {
       setError(t("chooseSealedCircle"));
       return;
     }
@@ -296,7 +329,11 @@ export default function WriteScreen() {
     setNotice(null);
     try {
       if (isEditingToday) {
-        await bloomApi.updateTodayEntry(session.accessToken, { text: text.trim(), mood, promptKey });
+        await bloomApi.updateTodayEntry(session.accessToken, {
+          text: text.trim(),
+          mood,
+          promptKey,
+        });
         setIsEditingToday(false);
         await clearEditor();
         await loadTodayStatus();
@@ -306,17 +343,27 @@ export default function WriteScreen() {
           clientEntryId: draftClientEntryId ?? createClientEntryId(),
           authorLocalDate: localDate,
           authorTimeZoneId: getDeviceTimeZone(),
-          text: text.trim(), mood, promptKey, circleIds: selectedCircleIds,
+          text: text.trim(),
+          mood,
+          promptKey,
+          circleIds: selectedAvailableCircleIds,
         };
         if (imageUris.length > 0)
-          await bloomApi.submitEntryWithMedia(session.accessToken, submission, imageUris);
+          await bloomApi.submitEntryWithMedia(
+            session.accessToken,
+            submission,
+            imageUris,
+          );
         else await bloomApi.submitEntry(session.accessToken, submission);
         await clearEditor();
         await loadTodayStatus();
         setNotice(t("diarySealed"));
       }
     } catch (submitError) {
-      if (submitError instanceof Error && submitError.message.includes("(409)")) {
+      if (
+        submitError instanceof Error &&
+        submitError.message.includes("(409)")
+      ) {
         await loadTodayStatus();
         setIsEditingToday(false);
         setNotice(t("todayAlreadySealed"));
@@ -339,6 +386,7 @@ export default function WriteScreen() {
     mood,
     promptKey,
     selectedCircleIds,
+    selectedAvailableCircleIds,
     session?.accessToken,
     text,
     isTodayStatusLoading,
@@ -356,26 +404,37 @@ export default function WriteScreen() {
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      quality: 0.85,
+      // Keep photos visually clear while reducing upload size on supported platforms.
+      quality: 0.8,
       allowsEditing: false,
       allowsMultipleSelection: true,
       selectionLimit: 10,
     });
     if (!result.canceled) {
-      setImageUris((current) => {
-        const next = [...current];
-        const selectedIdentities = new Set(photoIdentityByUri.current.values());
-        for (const asset of result.assets) {
-          const identity = getPhotoIdentity(asset);
-          if (selectedIdentities.has(identity) || next.length >= 10) continue;
-          next.push(asset.uri);
-          photoIdentityByUri.current.set(asset.uri, identity);
-          selectedIdentities.add(identity);
-        }
-        return next;
-      });
+      try {
+        const normalizedAssets = await Promise.all(
+          result.assets.map(async (asset) => ({
+            asset,
+            uri: await normalizeSelectedImage(asset),
+          })),
+        );
+        setImageUris((current) => {
+          const next = [...current];
+          const selectedIdentities = new Set(photoIdentityByUri.current.values());
+          for (const { asset, uri } of normalizedAssets) {
+            const identity = getPhotoIdentity(asset);
+            if (selectedIdentities.has(identity) || next.length >= 10) continue;
+            next.push(uri);
+            photoIdentityByUri.current.set(uri, identity);
+            selectedIdentities.add(identity);
+          }
+          return next;
+        });
+      } catch {
+        setError(t("photoProcessingFailed"));
+      }
     }
-  }, []);
+  }, [t]);
 
   const removeImage = useCallback((uri: string) => {
     photoIdentityByUri.current.delete(uri);
@@ -391,7 +450,13 @@ export default function WriteScreen() {
       {error ? (
         <InlineAlert message={error} onDismiss={() => setError(null)} />
       ) : null}
-      {notice ? <InlineAlert message={notice} onDismiss={() => setNotice(null)} variant="success" /> : null}
+      {notice ? (
+        <InlineAlert
+          message={notice}
+          onDismiss={() => setNotice(null)}
+          variant="success"
+        />
+      ) : null}
 
       {isTodayStatusLoading ? (
         <View style={styles.statusLoading}>
@@ -400,25 +465,57 @@ export default function WriteScreen() {
       ) : todayStatus?.hasEntry && !isEditingToday ? (
         <View style={styles.sealedCard}>
           <View style={styles.sealedIcon}>
-            <MaterialCommunityIcons color={colors.sageDark} name="lock-check-outline" size={28} />
+            <MaterialCommunityIcons
+              color={colors.sageDark}
+              name="lock-check-outline"
+              size={28}
+            />
           </View>
           <Text style={styles.sealedTitle}>{t("todaySealedTitle")}</Text>
-          <Text style={styles.sealedBody}>{todayStatus.canModify ? t("todayEditableBody") : t("todayLockedBody")}</Text>
+          <Text style={styles.sealedBody}>
+            {todayStatus.canModify
+              ? t("todayEditableBody")
+              : t("todayLockedBody")}
+          </Text>
           {todayStatus.submittedAtUtc ? (
-            <Text style={styles.sealedMeta}>{formatSubmittedAt(todayStatus.submittedAtUtc)}</Text>
+            <Text style={styles.sealedMeta}>
+              {formatSubmittedAt(todayStatus.submittedAtUtc)}
+            </Text>
           ) : null}
           <Text style={styles.sealedMeta}>
             {todayStatus.circleIds.length} {t("circles")}
           </Text>
           {todayStatus.canModify ? (
             <>
-              {todayStatus.modificationEndsAtUtc ? <Text style={styles.sealedMeta}>{t("todayEditUntil")} {formatSubmittedAt(todayStatus.modificationEndsAtUtc)}</Text> : null}
+              {todayStatus.modificationEndsAtUtc ? (
+                <Text style={styles.sealedMeta}>
+                  {t("todayEditUntil")}{" "}
+                  {formatSubmittedAt(todayStatus.modificationEndsAtUtc)}
+                </Text>
+              ) : null}
               <View style={styles.sealedActions}>
-                <Pressable accessibilityRole="button" accessibilityLabel={t("editToday")} onPress={beginEditingToday} style={[styles.sealedAction, styles.sealedActionSecondary]}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("editToday")}
+                  onPress={beginEditingToday}
+                  style={[styles.sealedAction, styles.sealedActionSecondary]}
+                >
                   <Text style={styles.sealedActionText}>{t("editToday")}</Text>
                 </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel={t("deleteToday")} onPress={deleteToday} style={[styles.sealedAction, styles.sealedActionDanger]}>
-                  <Text style={[styles.sealedActionText, styles.sealedActionDangerText]}>{t("deleteToday")}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("deleteToday")}
+                  onPress={deleteToday}
+                  style={[styles.sealedAction, styles.sealedActionDanger]}
+                >
+                  <Text
+                    style={[
+                      styles.sealedActionText,
+                      styles.sealedActionDangerText,
+                    ]}
+                  >
+                    {t("deleteToday")}
+                  </Text>
                 </Pressable>
               </View>
             </>
@@ -426,172 +523,199 @@ export default function WriteScreen() {
         </View>
       ) : (
         <>
-      <Text style={styles.section}>{t("mood")}</Text>
-      <View style={styles.moodRow}>
-        {MOODS.map((option) => (
+          <Text style={styles.section}>{t("mood")}</Text>
+          <View style={styles.moodRow}>
+            {MOODS.map((option) => (
+              <Pressable
+                accessibilityLabel={`${t("moodAccessibility")} ${t(option.key)}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: mood === option.key }}
+                key={option.key}
+                onPress={() =>
+                  setMood((current) =>
+                    current === option.key ? undefined : option.key,
+                  )
+                }
+                style={[
+                  styles.moodTile,
+                  mood === option.key ? styles.moodTileSelected : null,
+                ]}
+              >
+                <Text style={styles.moodEmoji}>{option.emoji}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <TextInput
+            accessibilityLabel={t("diaryEntry")}
+            multiline
+            maxLength={5000}
+            onChangeText={setText}
+            placeholder={t("diaryPlaceholder")}
+            placeholderTextColor={colors.inkSoft}
+            style={styles.editor}
+            textAlignVertical="top"
+            value={text}
+          />
+          <Text style={styles.counter}>{text.length}/5000</Text>
+
           <Pressable
-            accessibilityLabel={`${t("moodAccessibility")} ${t(option.key)}`}
             accessibilityRole="button"
-            accessibilityState={{ selected: mood === option.key }}
-            key={option.key}
-            onPress={() =>
-              setMood((current) =>
-                current === option.key ? undefined : option.key,
-              )
-            }
+            accessibilityLabel={t("attachPhotoAccessibility")}
+            disabled={isEditingToday}
+            onPress={() => void pickImage()}
             style={[
-              styles.moodTile,
-              mood === option.key ? styles.moodTileSelected : null,
+              styles.photoButton,
+              isEditingToday ? styles.submitDisabled : null,
             ]}
           >
-            <Text style={styles.moodEmoji}>{option.emoji}</Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <TextInput
-        accessibilityLabel={t("diaryEntry")}
-        multiline
-        maxLength={5000}
-        onChangeText={setText}
-        placeholder={t("diaryPlaceholder")}
-        placeholderTextColor={colors.inkSoft}
-        style={styles.editor}
-        textAlignVertical="top"
-        value={text}
-      />
-      <Text style={styles.counter}>{text.length}/5000</Text>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t("attachPhotoAccessibility")}
-        disabled={isEditingToday}
-        onPress={() => void pickImage()}
-        style={[styles.photoButton, isEditingToday ? styles.submitDisabled : null]}
-      >
-        <Text style={styles.photoButtonText}>
-          {imageUris.length > 0
-            ? `Add more photos (${imageUris.length}/10)`
-            : t("attachPhoto")}
-        </Text>
-      </Pressable>
-      {imageUris.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.photoGallery}
-        >
-          {imageUris.map((uri, index) => (
-            <View key={`${uri}-${index}`} style={styles.photoTile}>
-              <Image
-                accessibilityLabel={`${t("selectedDiaryPhoto")} ${index + 1}`}
-                contentFit="cover"
-                source={uri}
-                style={styles.photoPreview}
-              />
-              <Pressable
-                accessibilityLabel={`${t("removePhoto")} ${index + 1}`}
-                onPress={() => removeImage(uri)}
-                style={styles.removePhoto}
-              >
-                <Text style={styles.removePhotoText}>×</Text>
-              </Pressable>
-            </View>
-          ))}
-        </ScrollView>
-      ) : null}
-
-      <Text style={styles.section}>{t("prompt")}</Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t("choosePrompt")}
-        disabled={isEditingToday}
-        onPress={() => {
-          const currentIndex = PROMPTS.findIndex(
-            (prompt) => prompt.key === promptKey,
-          );
-          const nextPrompt =
-            PROMPTS[(currentIndex + 1) % PROMPTS.length] ?? PROMPTS[0]!;
-          setPromptKey(nextPrompt.key);
-        }}
-        style={styles.prompt}
-      >
-        <Text style={styles.promptText}>
-          {(() => {
-            const prompt = PROMPTS.find((item) => item.key === promptKey);
-            return prompt ? t(prompt.translationKey) : t("promptHint");
-          })()}
-        </Text>
-        <Text style={styles.promptAction}>
-          {promptKey ? t("changePrompt") : t("choosePromptAction")}
-        </Text>
-      </Pressable>
-
-      <View style={styles.sectionRow}>
-        <Text style={[styles.section, styles.sectionInRow]}>{t("sealTo")}</Text>
-        {circles.length > 0 ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              allCirclesSelected ? t("clearAll") : t("selectAll")
-            }
-            onPress={toggleAllCircles}
-            disabled={isEditingToday}
-          >
-            <Text style={styles.selectAll}>
-              {allCirclesSelected ? t("clearAll") : t("selectAll")}
+            <Text style={styles.photoButtonText}>
+              {imageUris.length > 0
+                ? `Add more photos (${imageUris.length}/10)`
+                : t("attachPhoto")}
             </Text>
           </Pressable>
-        ) : null}
-      </View>
-      {isLoading ? <ActivityIndicator color={colors.coralDark} /> : null}
-      {!isLoading && circles.length === 0 ? (
-        <Text style={styles.empty}>{t("createSealedCircle")}</Text>
-      ) : null}
-      {circles.map((circle) => {
-        const selected = selectedCircleIds.includes(circle.id);
-        return (
-          <Pressable
-            accessibilityLabel={`${t("selectCircle")} ${circle.name}`}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: selected }}
-            key={circle.id}
-            onPress={() => toggleCircle(circle.id)}
-            disabled={isEditingToday}
-            style={[styles.circle, selected ? styles.circleSelected : null]}
-          >
-            <Text style={styles.circleEmoji}>{circle.emoji}</Text>
-            <View style={styles.circleCopy}>
-              <Text style={styles.circleName}>{circle.name}</Text>
-              <Text style={styles.circleMeta}>
-                {circle.memberCount} {circle.memberCount === 1 ? t("member") : t("memberPlural")}
-              </Text>
-            </View>
-            <Text style={styles.check}>{selected ? "✓" : "○"}</Text>
-          </Pressable>
-        );
-      })}
+          {imageUris.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.photoGallery}
+            >
+              {imageUris.map((uri, index) => (
+                <View key={`${uri}-${index}`} style={styles.photoTile}>
+                  <Image
+                    accessibilityLabel={`${t("selectedDiaryPhoto")} ${index + 1}`}
+                    contentFit="cover"
+                    source={uri}
+                    style={styles.photoPreview}
+                  />
+                  <Pressable
+                    accessibilityLabel={`${t("removePhoto")} ${index + 1}`}
+                    onPress={() => removeImage(uri)}
+                    style={styles.removePhoto}
+                  >
+                    <Text style={styles.removePhotoText}>×</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+          ) : null}
 
-      <Pressable
-        accessibilityLabel={isEditingToday ? t("saveChanges") : t("sealDiaryEntry")}
-        accessibilityRole="button"
-        disabled={isSubmitting}
-        onPress={() => void submit()}
-        style={({ pressed }) => [
-          styles.submit,
-          pressed ? styles.submitPressed : null,
-          isSubmitting ? styles.submitDisabled : null,
-        ]}
-      >
-        {isSubmitting ? (
-          <ActivityIndicator color={colors.card} />
-        ) : (
-          <Text style={styles.submitText}>
-            {isEditingToday ? t("saveChanges") : t("sealDiary")}
-            {selectedCount > 0 ? ` · ${selectedCount}` : ""}
-          </Text>
-        )}
-      </Pressable>
+          <Text style={styles.section}>{t("prompt")}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("choosePrompt")}
+            disabled={isEditingToday}
+            onPress={() => {
+              const currentIndex = PROMPTS.findIndex(
+                (prompt) => prompt.key === promptKey,
+              );
+              const nextPrompt =
+                PROMPTS[(currentIndex + 1) % PROMPTS.length] ?? PROMPTS[0]!;
+              setPromptKey(nextPrompt.key);
+            }}
+            style={styles.prompt}
+          >
+            <Text style={styles.promptText}>
+              {(() => {
+                const prompt = PROMPTS.find((item) => item.key === promptKey);
+                return prompt ? t(prompt.translationKey) : t("promptHint");
+              })()}
+            </Text>
+            <Text style={styles.promptAction}>
+              {promptKey ? t("changePrompt") : t("choosePromptAction")}
+            </Text>
+          </Pressable>
+
+          <View style={styles.sectionRow}>
+            <Text style={[styles.section, styles.sectionInRow]}>
+              {t("sealTo")}
+            </Text>
+            {circles.length > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  allCirclesSelected ? t("clearAll") : t("selectAll")
+                }
+                onPress={toggleAllCircles}
+                disabled={isEditingToday}
+              >
+                <Text style={styles.selectAll}>
+                  {allCirclesSelected ? t("clearAll") : t("selectAll")}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {isLoading ? <ActivityIndicator color={colors.coralDark} /> : null}
+          {!isLoading && circles.length === 0 ? (
+            <View style={styles.emptyCircleCard}>
+              <View style={styles.emptyCircleIcon}>
+                <MaterialCommunityIcons
+                  color={colors.sageDark}
+                  name="sprout-outline"
+                  size={26}
+                />
+              </View>
+              <Text style={styles.emptyCircleTitle}>{t("noSealedCirclesTitle")}</Text>
+              <Text style={styles.emptyCircleBody}>{t("createSealedCircle")}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("createCircleAction")}
+                onPress={() => router.push("/circles")}
+                style={styles.emptyCircleButton}
+              >
+                <Text style={styles.emptyCircleButtonText}>{t("createCircleAction")}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {circles.map((circle) => {
+            const selected = selectedCircleIds.includes(circle.id);
+            return (
+              <Pressable
+                accessibilityLabel={`${t("selectCircle")} ${circle.name}`}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: selected }}
+                key={circle.id}
+                onPress={() => toggleCircle(circle.id)}
+                disabled={isEditingToday}
+                style={[styles.circle, selected ? styles.circleSelected : null]}
+              >
+                <Text style={styles.circleEmoji}>{circle.emoji}</Text>
+                <View style={styles.circleCopy}>
+                  <Text style={styles.circleName}>{circle.name}</Text>
+                  <Text style={styles.circleMeta}>
+                    {circle.memberCount}{" "}
+                    {circle.memberCount === 1 ? t("member") : t("memberPlural")}
+                  </Text>
+                </View>
+                <Text style={styles.check}>{selected ? "✓" : "○"}</Text>
+              </Pressable>
+            );
+          })}
+
+          <Pressable
+            accessibilityLabel={
+              isEditingToday ? t("saveChanges") : t("sealDiaryEntry")
+            }
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canSubmit }}
+            disabled={!canSubmit}
+            onPress={() => void submit()}
+            style={({ pressed }) => [
+              styles.submit,
+              pressed ? styles.submitPressed : null,
+              !canSubmit ? styles.submitDisabled : null,
+            ]}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color={colors.card} />
+            ) : (
+              <Text style={styles.submitText}>
+                {isEditingToday ? t("saveChanges") : t("sealDiary")}
+                {selectedCount > 0 ? ` · ${selectedCount}` : ""}
+              </Text>
+            )}
+          </Pressable>
         </>
       )}
     </Screen>

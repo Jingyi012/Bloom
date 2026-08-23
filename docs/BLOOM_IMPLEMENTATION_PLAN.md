@@ -195,7 +195,7 @@ Start as a **modular monolith**, not microservices. It is cheaper to build, test
 flowchart LR
     Mobile["React Native mobile app"] -->|HTTPS / JSON| API["ASP.NET Core .NET 10 API"]
     API --> DB["PostgreSQL"]
-    API --> Images["Project-local encrypted image folder"]
+    API --> Images["Project-local image folder"]
     API --> Keys["Local protected key ring / environment secret"]
     API --> Obs["Logs, traces, metrics, crash reporting"]
 ```
@@ -204,7 +204,7 @@ Recommended deployment units:
 
 1. `Bloom.Api`: the HTTP API and current project-local image host. It is stateful/single-instance at this stage because images live on its persistent local volume.
 2. PostgreSQL.
-3. A persistent local volume for encrypted image files and encryption key material.
+3. A persistent local volume for image files and encryption key material.
 
 The current stage deliberately has no Redis, background worker, push provider, cloud object storage, keepsake processor, or scheduled bloom job. This means the API should be deployed as a single instance unless the image folder is moved to shared storage. In a container or hosted environment, `App_Data` must be mounted on a persistent volume or images will disappear on redeploy. Database and image-folder backups must be coordinated.
 
@@ -505,8 +505,8 @@ Use a controllable `TimeProvider` throughout so bloom-boundary tests do not depe
 2. Add runtime files and local key material under `App_Data` to `.gitignore`; commit at most an empty placeholder. Never commit user images or encryption keys.
 3. `POST /entries` receives one bounded image through multipart form data. Reject the request before allocation when the declared/request size exceeds the configured limit.
 4. Validate the actual file signature, allowed content type, decoded dimensions, and checksum. Strip EXIF/location metadata and normalize the image synchronously before accepting the entry.
-5. Generate the relative path on the server from opaque IDs, for example `{userId}/{year}/{month}/{mediaId}.bin`. Ignore the client file name, reject path separators, resolve the final full path, and verify it remains under the configured root.
-6. Encrypt bytes before writing. Write to a temporary file in the same root and atomically rename it only when validation succeeds. If the database transaction fails, delete the newly written file in the request's compensation path.
+5. Generate the relative path on the server from opaque IDs, for example `{userId}/{year}/{month}/{mediaId}.jpg`. Ignore the client file name, reject path separators, resolve the final full path, and verify it remains under the configured root. Preserve the validated image extension rather than storing an encrypted `.bin` file.
+6. Write validated image bytes to a temporary file in the same root and atomically rename it only when validation succeeds. If the database transaction fails, delete the newly written file in the request's compensation path.
 7. Store only the generated relative path and safe metadata in PostgreSQL. The folder must not be under `wwwroot` and must not be exposed by static-file middleware.
 8. `GET /media/{mediaId}/content` performs the same circle, bloom, membership, joined-date, and withdrawn-publication authorization as entry text before decrypting and streaming the file.
 9. The current local implementation is single-instance only. Back up PostgreSQL and `App_Data/uploads` together, and mount `App_Data` as persistent storage when using containers.
@@ -531,7 +531,7 @@ sequenceDiagram
     participant U as User
     participant M as Mobile app
     participant A as .NET API
-    participant F as Local encrypted image folder
+    participant F as Local image folder
     participant D as PostgreSQL
     U->>M: Write text, mood, optional photo
     M->>M: Autosave local draft
@@ -582,7 +582,7 @@ Prioritize features that deepen delayed connection rather than turn Bloom into a
 - Validate authorization again before streaming every media file.
 - Validate Google OIDC tokens against the configured issuer/audience/signing keys, nonce, expiry, and verified-email claim. Key users by Google `sub`, not by mutable email.
 - Hash Bloom refresh/session tokens in the database, rotate them, detect reuse, and rate-limit Google auth, refresh, search, invite, and comment endpoints.
-- Encrypt database backups, entry payloads, and local image files. Keep encryption secrets and the local key ring outside source control with access restricted to the API process.
+- Encrypt database backups and entry payloads. Keep the local image folder outside the public web root and expose images only through the authorized media endpoint. Keep encryption secrets and the local key ring outside source control with access restricted to the API process.
 - Strip photo EXIF metadata, validate actual file signatures, cap dimensions/size, and bound synchronous image-processing time/memory.
 - Use parameterized EF queries, output encoding, strict DTO allowlists, and safe Markdown/plain text. Do not accept arbitrary HTML.
 - Provide block/report tools before broad user discovery or public invite surfaces.

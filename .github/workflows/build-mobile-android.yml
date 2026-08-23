@@ -1,0 +1,97 @@
+name: Build Bloom Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example 0.1.1"
+        required: true
+        default: "0.1.0"
+        type: string
+      prerelease:
+        description: "Mark this release as a prerelease"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Build preview APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    env:
+      EXPO_PUBLIC_API_URL: ${{ secrets.BLOOM_MOBILE_API_URL }}
+      EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.BLOOM_GOOGLE_IOS_CLIENT_ID }}
+      EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.BLOOM_GOOGLE_ANDROID_CLIENT_ID }}
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.BLOOM_GOOGLE_WEB_CLIENT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Validate build secrets
+        shell: bash
+        run: |
+          test -n "${{ secrets.EXPO_TOKEN }}" || { echo "EXPO_TOKEN is required"; exit 1; }
+          test -n "$EXPO_PUBLIC_API_URL" || { echo "BLOOM_MOBILE_API_URL is required"; exit 1; }
+          test -n "$EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID" || { echo "BLOOM_GOOGLE_ANDROID_CLIENT_ID is required"; exit 1; }
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Install EAS CLI
+        run: npm install --global eas-cli
+
+      - name: Build APK with EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          BLOOM_APP_VERSION: ${{ inputs.version }}
+        run: eas build --platform android --profile preview --non-interactive --wait --json > eas-build.json
+
+      - name: Download APK
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Version must use semantic version format, for example 0.1.1"
+            exit 1
+          fi
+          node -e '
+            const fs = require("fs");
+            const payload = JSON.parse(fs.readFileSync("eas-build.json", "utf8"));
+            const build = Array.isArray(payload) ? payload[0] : payload;
+            const url = build?.artifacts?.buildUrl;
+            if (!url) throw new Error("EAS did not return an APK URL");
+            fs.writeFileSync("apk-url.txt", url);
+          '
+          curl --fail --location --retry 3 "$(cat apk-url.txt)" --output "bloom-${RELEASE_VERSION}.apk"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bloom-${{ inputs.version }}-apk
+          path: apps/mobile/bloom-${{ inputs.version }}.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: Bloom v${{ inputs.version }}
+          prerelease: ${{ inputs.prerelease }}
+          generate_release_notes: true
+          files: apps/mobile/bloom-${{ inputs.version }}.apk
