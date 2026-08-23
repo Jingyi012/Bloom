@@ -11,8 +11,6 @@ export const profileStyles = StyleSheet.create({
   avatarText: { color: colors.card, fontFamily: typography.displayBold, fontSize: 28 },
   profileName: { color: colors.ink, fontFamily: typography.display, fontSize: 20 },
   profileEmail: { color: colors.inkSoft, fontFamily: typography.ui, fontSize: 12, marginTop: 3 },
-  editButton: { backgroundColor: colors.card, borderColor: colors.line, borderRadius: 999, borderWidth: 1, marginTop: 12, paddingHorizontal: 16, paddingVertical: 8 },
-  editButtonText: { color: colors.coralDark, fontFamily: typography.uiBold, fontSize: 12 },
   card: { ...shadows.card, backgroundColor: colors.card, borderColor: colors.line, borderRadius: 18, borderWidth: 1, marginTop: 20, padding: 16 },
   label: { color: colors.inkSoft, fontFamily: typography.uiBold, fontSize: 11, letterSpacing: 1, marginBottom: 8, textTransform: 'uppercase' },
   labelSpaced: { color: colors.inkSoft, fontFamily: typography.uiBold, fontSize: 11, letterSpacing: 1, marginBottom: 8, marginTop: 14, textTransform: 'uppercase' },

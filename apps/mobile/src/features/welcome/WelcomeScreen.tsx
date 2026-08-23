@@ -1,5 +1,6 @@
 import { Redirect } from 'expo-router';
 import { ActivityIndicator, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useAuth } from '@/auth/AuthProvider';
 import { GoogleSignInButton } from '@/components/GoogleSignInButton';
 import { Screen } from '@/components/Screen';
@@ -18,7 +19,12 @@ export default function WelcomeScreen() {
   return (
     <Screen>
       <View style={styles.container}>
-        <Text style={styles.emoji}>🌱</Text>
+        <Image
+          accessibilityLabel="Bloom sprout logo"
+          contentFit="contain"
+          source={require('../../../assets/bloom-icon.png')}
+          style={styles.logo}
+        />
         <Text style={styles.eyebrow}>BLOOM</Text>
         <Text style={styles.title}>{t('welcomeTitle')}</Text>
         <Text style={styles.body}>{t('welcomeBody')}</Text>

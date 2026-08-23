@@ -3,6 +3,7 @@
     "name": "Bloom",
     "slug": "bloom",
     "version": "0.1.0",
+    "icon": "./assets/bloom-icon.png",
     "orientation": "portrait",
     "scheme": "com.bestfriends.bloom",
     "platforms": [
@@ -14,7 +15,16 @@
       "expo-router",
       "expo-secure-store",
       "expo-image-picker",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FCF8F4",
+          "image": "./assets/bloom-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -24,7 +34,11 @@
       "bundleIdentifier": "com.bestfriends.bloom"
     },
     "android": {
-      "package": "com.bestfriends.bloom"
+      "package": "com.bestfriends.bloom",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/bloom-icon.png",
+        "backgroundColor": "#FCF8F4"
+      }
     },
     "extra": {
       "router": {},

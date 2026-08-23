@@ -1,8 +1,8 @@
-import * as SecureStore from 'expo-secure-store';
-import type { StoredSession } from '@/types/session';
+import * as SecureStore from "expo-secure-store";
+import type { StoredSession } from "@/types/session";
 
-const ACCESS_TOKEN_KEY = 'bloom.access-token';
-const REFRESH_TOKEN_KEY = 'bloom.refresh-token';
+const ACCESS_TOKEN_KEY = "bloom.access-token";
+const REFRESH_TOKEN_KEY = "bloom.refresh-token";
 
 export async function readSession(): Promise<StoredSession | null> {
   const [accessToken, refreshToken] = await Promise.all([

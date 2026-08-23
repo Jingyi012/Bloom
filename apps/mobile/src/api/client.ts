@@ -234,12 +234,9 @@ export const bloomApi = {
     );
   },
   getEntry: (accessToken: string, publicationId: string) =>
-    requestJson<TimelineEntry>(
-      `/entries/${publicationId}`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      },
-    ),
+    requestJson<TimelineEntry>(`/entries/${publicationId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
   addReaction: (
     accessToken: string,
     publicationId: string,

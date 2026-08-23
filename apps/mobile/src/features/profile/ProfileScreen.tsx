@@ -46,7 +46,9 @@ export default function ProfileScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<"profile" | "language" | "reminder" | null>(null);
+  const [sheet, setSheet] = useState<
+    "profile" | "language" | "reminder" | null
+  >(null);
   const [showReminderPicker, setShowReminderPicker] = useState(false);
 
   const reminderDate = useMemo(() => {
@@ -56,12 +58,7 @@ export default function ProfileScreen() {
     const value = new Date();
     const safeHours = Number.isFinite(hours) ? hours : 20;
     const safeMinutes = Number.isFinite(minutes) ? minutes : 0;
-    value.setHours(
-      safeHours,
-      safeMinutes,
-      0,
-      0,
-    );
+    value.setHours(safeHours, safeMinutes, 0, 0);
     return value;
   }, [reminderTime]);
 
@@ -80,23 +77,24 @@ export default function ProfileScreen() {
     if (sheet !== "reminder") setShowReminderPicker(false);
   }, [sheet]);
 
-  const loadStats = useCallback(async (refresh = false) => {
-    if (!session?.accessToken) return;
-    refresh ? setIsRefreshing(true) : setIsLoading(true);
-    setError(null);
-    try {
-      setStats(await bloomApi.stats(session.accessToken));
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : t("statsLoadFailed"),
-      );
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [session?.accessToken, t]);
+  const loadStats = useCallback(
+    async (refresh = false) => {
+      if (!session?.accessToken) return;
+      refresh ? setIsRefreshing(true) : setIsLoading(true);
+      setError(null);
+      try {
+        setStats(await bloomApi.stats(session.accessToken));
+      } catch (loadError) {
+        setError(
+          loadError instanceof Error ? loadError.message : t("statsLoadFailed"),
+        );
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [session?.accessToken, t],
+  );
 
   useEffect(() => {
     void loadStats();
@@ -122,9 +120,7 @@ export default function ProfileScreen() {
       setSheet(null);
     } catch (saveError) {
       setError(
-        saveError instanceof Error
-          ? saveError.message
-          : t("profileSaveFailed"),
+        saveError instanceof Error ? saveError.message : t("profileSaveFailed"),
       );
     } finally {
       setIsSaving(false);
@@ -133,22 +129,18 @@ export default function ProfileScreen() {
 
   const deleteAccount = useCallback(() => {
     if (!session?.accessToken) return;
-    Alert.alert(
-      t("deleteAccount"),
-      t("dangerBody"),
-      [
-        { text: t("deleteConfirmCancel"), style: "cancel" },
-        {
-          text: t("deleteAccount"),
-          style: "destructive",
-          onPress: () =>
-            void (async () => {
-              await bloomApi.deleteAccount(session.accessToken);
-              await signOut();
-            })(),
-        },
-      ],
-    );
+    Alert.alert(t("deleteAccount"), t("dangerBody"), [
+      { text: t("deleteConfirmCancel"), style: "cancel" },
+      {
+        text: t("deleteAccount"),
+        style: "destructive",
+        onPress: () =>
+          void (async () => {
+            await bloomApi.deleteAccount(session.accessToken);
+            await signOut();
+          })(),
+      },
+    ]);
   }, [language, session?.accessToken, signOut, t]);
 
   return (
@@ -166,16 +158,17 @@ export default function ProfileScreen() {
           {user?.displayName || t("yourProfile")}
         </Text>
         <Text style={styles.profileEmail}>{user?.email}</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setSheet("profile")}
-          style={styles.editButton}
-        >
-          <Text style={styles.editButtonText}>{t("editProfile")}</Text>
-        </Pressable>
       </View>
-      {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
-      {notice ? <InlineAlert message={notice} onDismiss={() => setNotice(null)} variant="success" /> : null}
+      {error ? (
+        <InlineAlert message={error} onDismiss={() => setError(null)} />
+      ) : null}
+      {notice ? (
+        <InlineAlert
+          message={notice}
+          onDismiss={() => setNotice(null)}
+          variant="success"
+        />
+      ) : null}
       {isLoading ? (
         <ActivityIndicator color={colors.coralDark} />
       ) : (
@@ -205,36 +198,64 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => setSheet("language")} style={styles.settingRow}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setSheet("language")}
+          style={styles.settingRow}
+        >
           <View style={styles.settingIcon}>
-            <MaterialCommunityIcons color={colors.sageDark} name="translate" size={20} />
+            <MaterialCommunityIcons
+              color={colors.sageDark}
+              name="translate"
+              size={20}
+            />
           </View>
           <View style={styles.settingCopy}>
             <Text style={styles.settingTitle}>{t("language")}</Text>
-            <Text style={styles.hint}>{language === "zh" ? t("chinese") : t("english")}</Text>
+            <Text style={styles.hint}>
+              {language === "zh" ? t("chinese") : t("english")}
+            </Text>
           </View>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => setSheet("reminder")} style={styles.settingRow}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setSheet("reminder")}
+          style={styles.settingRow}
+        >
           <View style={styles.settingIcon}>
-            <MaterialCommunityIcons color={colors.coralDark} name="bell-outline" size={20} />
+            <MaterialCommunityIcons
+              color={colors.coralDark}
+              name="bell-outline"
+              size={20}
+            />
           </View>
           <View style={styles.settingCopy}>
             <Text style={styles.settingTitle}>{t("reminder")}</Text>
             <Text style={styles.hint}>
-              {remindersEnabled ? `${t("on")} · ${formatLocalTime(reminderDate)}` : t("off")}
+              {remindersEnabled
+                ? `${t("on")} · ${formatLocalTime(reminderDate)}`
+                : t("off")}
             </Text>
           </View>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
       </View>
-      <Pressable accessibilityRole="button" onPress={() => void signOut()} style={styles.signOut}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => void signOut()}
+        style={styles.signOut}
+      >
         <Text style={styles.signOutText}>{t("signOut")}</Text>
       </Pressable>
       <View style={styles.dangerCard}>
         <Text style={styles.dangerTitle}>{t("dangerZone")}</Text>
         <Text style={styles.dangerBody}>{t("dangerBody")}</Text>
-        <Pressable accessibilityRole="button" onPress={deleteAccount} style={styles.danger}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={deleteAccount}
+          style={styles.danger}
+        >
           <Text style={styles.dangerText}>{t("deleteAccount")}</Text>
         </Pressable>
       </View>
@@ -257,7 +278,11 @@ export default function ProfileScreen() {
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>
-                {sheet === "profile" ? t("editProfile") : sheet === "language" ? t("language") : t("reminder")}
+                {sheet === "profile"
+                  ? t("editProfile")
+                  : sheet === "language"
+                    ? t("language")
+                    : t("reminder")}
               </Text>
               <Pressable
                 accessibilityRole="button"
@@ -331,7 +356,11 @@ export default function ProfileScreen() {
                     </Text>
                   </Pressable>
                 </View>
-                <Pressable accessibilityRole="button" onPress={() => setSheet(null)} style={styles.save}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setSheet(null)}
+                  style={styles.save}
+                >
                   <Text style={styles.saveText}>{t("done")}</Text>
                 </Pressable>
               </>
@@ -393,7 +422,9 @@ export default function ProfileScreen() {
                   </View>
                 ) : null}
                 {reminderStatus === "permissionDenied" ? (
-                  <Text style={styles.error}>{t("reminderPermissionDenied")}</Text>
+                  <Text style={styles.error}>
+                    {t("reminderPermissionDenied")}
+                  </Text>
                 ) : reminderStatus === "invalidTime" ? (
                   <Text style={styles.error}>{t("reminderTimeInvalid")}</Text>
                 ) : reminderStatus === "error" ? (
