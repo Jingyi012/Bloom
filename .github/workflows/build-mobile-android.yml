@@ -61,7 +61,9 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Install EAS CLI
-        run: npm install --global eas-cli
+        run: |
+          npm install --global eas-cli@22.2.0
+          eas --version
 
       - name: Sync mobile variables to EAS
         shell: bash
@@ -101,11 +103,16 @@ jobs:
           EAS_TARGET_ENV: ${{ inputs.target_env }}
         run: |
           if [[ "$EAS_TARGET_ENV" == "prod" ]]; then
-            EAS_ENVIRONMENT="production"
+            EAS_PROFILE="production-apk"
           else
-            EAS_ENVIRONMENT="preview"
+            EAS_PROFILE="preview"
           fi
-          eas build --platform android --profile preview --environment "$EAS_ENVIRONMENT" --non-interactive --wait --json > eas-build.json
+          if ! eas build --platform android --profile "$EAS_PROFILE" --non-interactive --wait --json > eas-build.json 2> eas-build.log; then
+            echo "EAS build failed. Diagnostic output:"
+            cat eas-build.log || true
+            cat eas-build.json || true
+            exit 1
+          fi
 
       - name: Download APK
         shell: bash
