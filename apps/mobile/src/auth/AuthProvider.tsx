@@ -35,11 +35,16 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const { t } = useSettings();
+  const googleClientIds = getGoogleClientIds();
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
     {
-      iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-      androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-      webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      // expo-auth-session throws during render when the platform client ID is
+      // undefined. Empty strings keep the app renderable and the guard below
+      // turns a misconfigured release into an actionable message instead of a
+      // startup crash.
+      iosClientId: googleClientIds.ios || "",
+      androidClientId: googleClientIds.android || "",
+      webClientId: googleClientIds.web || "",
       selectAccount: true,
     },
     { scheme: "com.bestfriends.bloom" },
@@ -126,12 +131,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const signInWithGoogle = useCallback(async () => {
     setError(null);
+    if (!googleClientIds.current) {
+      setError(t("googleNotConfigured"));
+      return;
+    }
     if (!request) {
       setError(t("signInLoading"));
       return;
     }
     await promptAsync();
-  }, [promptAsync, request, t]);
+  }, [googleClientIds.current, promptAsync, request, t]);
 
   const signOut = useCallback(async () => {
     await clearSession();
@@ -232,14 +241,31 @@ export function getApiConfiguration(): {
   apiUrl: string;
   googleClientIdConfigured: boolean;
 } {
+  const googleClientIds = getGoogleClientIds();
   return {
     apiUrl:
       (Constants.expoConfig?.extra?.apiUrl as string | undefined) ??
       process.env.EXPO_PUBLIC_API_URL ??
       "http://127.0.0.1:5052/api/v1",
-    googleClientIdConfigured: Boolean(
-      process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ||
-      process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-    ),
+    googleClientIdConfigured: Boolean(googleClientIds.current),
   };
+}
+
+function getGoogleClientIds(): {
+  ios?: string;
+  android?: string;
+  web?: string;
+  current?: string;
+} {
+  const extra = (Constants.expoConfig?.extra ?? {}) as {
+    googleIosClientId?: string;
+    googleAndroidClientId?: string;
+    googleWebClientId?: string;
+  };
+  const ios = extra.googleIosClientId ?? process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+  const android =
+    extra.googleAndroidClientId ?? process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+  const web = extra.googleWebClientId ?? process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  const current = Platform.select({ ios, android, default: web });
+  return { ios, android, web, current };
 }

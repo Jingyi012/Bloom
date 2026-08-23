@@ -221,6 +221,8 @@ const translations = {
     sealDiaryEntry: "Seal diary entry",
     unknownSignInError: "Unknown sign-in error",
     signInFailed: "Google sign-in could not be completed.",
+    googleNotConfigured:
+      "Google sign-in is not configured in this build. Please install the latest Bloom release.",
     missingIdentityToken: "Google did not return an identity token.",
     sessionStartFailed: "Bloom could not start your session",
     signInLoading: "Google sign-in is still loading.",
@@ -431,6 +433,7 @@ const translations = {
     sealDiaryEntry: "封存日记",
     unknownSignInError: "未知登录错误",
     signInFailed: "Google 登录未完成。",
+    googleNotConfigured: "此版本尚未配置 Google 登录，请安装最新的 Bloom 版本。",
     missingIdentityToken: "Google 没有返回身份令牌。",
     sessionStartFailed: "Bloom 无法开始你的会话",
     signInLoading: "Google 登录仍在加载。",
