@@ -34,7 +34,10 @@ export default function BloomTimelineScreen() {
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const loadingMoreRef = useRef(false);
 
   const load = useCallback(
     async (refresh = false) => {
@@ -44,6 +47,7 @@ export default function BloomTimelineScreen() {
       try {
         const page = await bloomApi.getTimeline(session.accessToken, circleId);
         setEntries(page.items);
+        setNextCursor(page.nextCursor);
       } catch (loadError) {
         setError(
           loadError instanceof Error
@@ -57,6 +61,25 @@ export default function BloomTimelineScreen() {
     },
     [circleId, session?.accessToken, t],
   );
+
+  const loadMore = useCallback(async () => {
+    if (!session?.accessToken || !circleId || !nextCursor || isLoading || isRefreshing || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setIsLoadingMore(true);
+    try {
+      const page = await bloomApi.getTimeline(session.accessToken, circleId, nextCursor);
+      setEntries((current) => {
+        const existingIds = new Set(current.map((entry) => entry.publicationId));
+        return [...current, ...page.items.filter((entry) => !existingIds.has(entry.publicationId))];
+      });
+      setNextCursor(page.nextCursor);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : t("timelineLoadFailed"));
+    } finally {
+      loadingMoreRef.current = false;
+      setIsLoadingMore(false);
+    }
+  }, [circleId, isLoading, isRefreshing, nextCursor, session?.accessToken, t]);
 
   useEffect(() => {
     void load();
@@ -145,6 +168,18 @@ export default function BloomTimelineScreen() {
           ListEmptyComponent={
             <Text style={styles.empty}>{t("noSharedEntries")}</Text>
           }
+          ListFooterComponent={
+            isLoadingMore ? (
+              <View style={styles.loadMoreFooter}>
+                <ActivityIndicator color={colors.coralDark} />
+                <Text style={styles.loadMoreText}>{t("loadingMore")}</Text>
+              </View>
+            ) : nextCursor === null && entries.length > 0 ? (
+              <Text style={styles.timelineEnd}>{t("timelineEnd")}</Text>
+            ) : null
+          }
+          onEndReached={() => void loadMore()}
+          onEndReachedThreshold={0.6}
           onRefresh={() => void load(true)}
           refreshing={isRefreshing}
           renderItem={({ item, index }) => (
