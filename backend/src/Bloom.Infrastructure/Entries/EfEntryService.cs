@@ -38,7 +38,7 @@ public sealed class EfEntryService(
             var user = await _db.Users.AsNoTracking().SingleAsync(candidate => candidate.Id == userId, cancellationToken).ConfigureAwait(false);
             var timeZone = FindTimeZone(user.TimeZoneId);
             var localDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(_timeProvider.GetUtcNow(), timeZone).DateTime);
-            return new TodayEntryStatus(false, localDate, null, null, Array.Empty<Guid>(), null, null, null, false, null);
+            return new TodayEntryStatus(false, localDate, null, null, Array.Empty<Guid>(), Array.Empty<Guid>(), null, null, null, false, null);
         }
 
         var mediaIds = await _db.MediaAssets.AsNoTracking()
@@ -53,6 +53,7 @@ public sealed class EfEntryService(
             context.Entry.Id,
             context.Entry.CreatedAtUtc,
             context.Publications.Select(item => item.Publication.CircleId).OrderBy(id => id).ToArray(),
+            mediaIds,
             context.CanModify ? _entryProtector.Unprotect(context.Entry.Text) : null,
             context.CanModify ? context.Entry.Mood : null,
             context.CanModify ? context.Entry.PromptKey : null,
@@ -71,6 +72,113 @@ public sealed class EfEntryService(
         context.Entry.Update(_entryProtector.Protect(text), mood, promptKey);
         _auditStampWriter.StampModified(context.Entry, userId);
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return await GetTodayStatusAsync(userId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<TodayEntryStatus> UpdateTodayWithMediaAsync(
+        Guid userId,
+        string text,
+        string? mood,
+        string? promptKey,
+        IReadOnlyCollection<Guid> circleIds,
+        IReadOnlyCollection<Guid> retainedMediaIds,
+        IReadOnlyCollection<ImageUpload> images,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        if (text.Trim().Length > 5000) throw new ArgumentException("Entry text cannot exceed 5,000 characters.", nameof(text));
+        ArgumentNullException.ThrowIfNull(retainedMediaIds);
+        ArgumentNullException.ThrowIfNull(images);
+        ArgumentNullException.ThrowIfNull(circleIds);
+        var desiredCircleIds = circleIds.Distinct().ToArray();
+        if (desiredCircleIds.Length is < 1 or > 12)
+            throw new ArgumentException("Select between one and twelve circles.", nameof(circleIds));
+        if (desiredCircleIds.Length != circleIds.Count)
+            throw new ArgumentException("Each circle may only be selected once.", nameof(circleIds));
+        if (retainedMediaIds.Count + images.Count > 10)
+            throw new ArgumentException("You can attach up to 10 images.", nameof(images));
+
+        var context = await LoadTodayContextAsync(userId, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Today's diary does not exist.");
+        EnsureCanModify(context);
+
+        var existingCircleIds = context.Publications.Select(item => item.Publication.CircleId).ToHashSet();
+        var addedCircleIds = desiredCircleIds.Where(id => !existingCircleIds.Contains(id)).ToArray();
+        if (addedCircleIds.Length > 0)
+        {
+            var addedCircles = await _db.Circles.Include(circle => circle.Members)
+                .Where(circle => addedCircleIds.Contains(circle.Id))
+                .ToArrayAsync(cancellationToken)
+                .ConfigureAwait(false);
+            if (addedCircles.Length != addedCircleIds.Length)
+                throw new KeyNotFoundException("One or more selected circles do not exist.");
+            var now = _timeProvider.GetUtcNow();
+            foreach (var circle in addedCircles)
+            {
+                if (!circle.HasActiveMember(userId))
+                    throw new UnauthorizedAccessException("You are not an active member of every selected circle.");
+                if (circle.GetCurrentStatus(now) != CircleStatus.Sealed)
+                    throw new InvalidOperationException("New circles must still be sealed.");
+                var publication = EntryPublication.Create(context.Entry.Id, circle.Id, userId, context.LocalDate, context.Entry.CreatedAtUtc);
+                _auditStampWriter.StampCreated(publication, userId);
+                _db.EntryPublications.Add(publication);
+            }
+        }
+        var removedPublications = context.Publications
+            .Where(item => !desiredCircleIds.Contains(item.Publication.CircleId))
+            .Select(item => item.Publication)
+            .ToArray();
+        _db.EntryPublications.RemoveRange(removedPublications);
+
+        var existingMedia = await _db.MediaAssets
+            .Where(asset => asset.DiaryEntryId == context.Entry.Id && asset.DeletedAtUtc == null)
+            .OrderBy(asset => asset.SortOrder)
+            .ToArrayAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var retained = retainedMediaIds.Distinct().ToHashSet();
+        if (retained.Count != retainedMediaIds.Count)
+            throw new ArgumentException("Media selection is invalid.", nameof(retainedMediaIds));
+        if (retained.Any(id => existingMedia.All(asset => asset.Id != id)))
+            throw new ArgumentException("Media selection is invalid.", nameof(retainedMediaIds));
+
+        context.Entry.Update(_entryProtector.Protect(text), mood, promptKey);
+        _auditStampWriter.StampModified(context.Entry, userId);
+
+        var removed = existingMedia.Where(asset => !retained.Contains(asset.Id)).ToArray();
+        _db.MediaAssets.RemoveRange(removed);
+        var sortOrder = existingMedia.Where(asset => retained.Contains(asset.Id)).Select(asset => asset.SortOrder).DefaultIfEmpty(-1).Max() + 1;
+        var storedImages = new List<StoredImage>();
+        try
+        {
+            foreach (var image in images)
+            {
+                await using (image.Content.ConfigureAwait(false))
+                {
+                    var stored = await _imageStorage.SaveAsync(userId, image.Content, image.ContentType, cancellationToken).ConfigureAwait(false);
+                    storedImages.Add(stored);
+                    var asset = MediaAsset.Create(context.Entry.Id, sortOrder++, stored.RelativePath, stored.ContentType, stored.SizeBytes, stored.Sha256);
+                    _auditStampWriter.StampCreated(asset, userId);
+                    _db.MediaAssets.Add(asset);
+                }
+            }
+            await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            foreach (var stored in storedImages)
+            {
+                try { await _imageStorage.DeleteAsync(stored.RelativePath, cancellationToken).ConfigureAwait(false); }
+                catch (FileNotFoundException) { }
+            }
+            throw;
+        }
+
+        foreach (var asset in removed)
+        {
+            try { await _imageStorage.DeleteAsync(asset.RelativePath, cancellationToken).ConfigureAwait(false); }
+            catch (FileNotFoundException) { }
+        }
         return await GetTodayStatusAsync(userId, cancellationToken).ConfigureAwait(false);
     }
 
@@ -304,6 +412,32 @@ public sealed class EfEntryService(
             var reaction = Reaction.Create(publicationId, userId, normalized);
             _auditStampWriter.StampCreated(reaction, userId);
             _db.Reactions.Add(reaction);
+            try
+            {
+                await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (DbUpdateException)
+            {
+                // Two taps from separate requests can race before either sees
+                // the unique reaction row. Let the winner be authoritative and
+                // make the losing request idempotent instead of returning 500.
+                _db.Entry(reaction).State = EntityState.Detached;
+                var concurrent = await _db.Reactions.AsNoTracking().AnyAsync(candidate =>
+                    candidate.EntryPublicationId == publicationId
+                    && candidate.UserId == userId
+                    && candidate.EmojiCode == normalized
+                    && candidate.DeletedAtUtc == null,
+                    cancellationToken).ConfigureAwait(false);
+                if (!concurrent) throw;
+            }
+        }
+        else if (existing.DeletedAtUtc is not null)
+        {
+            // Reaction rows are audited, so restore the same row instead of
+            // inserting a duplicate that would violate the unique key.
+            existing.DeletedAtUtc = null;
+            existing.DeletedByUserId = null;
+            _auditStampWriter.StampModified(existing, userId);
             await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
         return await GetReactionSummaryAsync(row.publication.Id, userId, normalized, cancellationToken).ConfigureAwait(false);

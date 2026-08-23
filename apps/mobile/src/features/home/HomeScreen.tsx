@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
@@ -27,10 +27,13 @@ export default function HomeScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadInFlightRef = useRef(false);
 
   const load = useCallback(
     async (refresh = false) => {
       if (!session?.accessToken) return;
+      if (loadInFlightRef.current) return;
+      loadInFlightRef.current = true;
       refresh ? setIsRefreshing(true) : setIsLoading(true);
       setError(null);
       try {
@@ -47,6 +50,7 @@ export default function HomeScreen() {
             : t("gardenLoadFailed"),
         );
       } finally {
+        loadInFlightRef.current = false;
         setIsLoading(false);
         setIsRefreshing(false);
       }

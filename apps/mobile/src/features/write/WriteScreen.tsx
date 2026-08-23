@@ -50,6 +50,7 @@ type EditorSnapshot = {
   promptKey?: string;
   selectedCircleIds: string[];
   imageUris: string[];
+  imageMediaIds: Array<string | null>;
   draftClientEntryId: string | null;
 };
 
@@ -109,8 +110,12 @@ export default function WriteScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [imageUris, setImageUris] = useState<string[]>([]);
+  const [imageMediaIds, setImageMediaIds] = useState<Array<string | null>>([]);
   const photoIdentityByUri = useRef(new Map<string, string>());
   const editingSnapshot = useRef<EditorSnapshot | null>(null);
+  const loadCirclesInFlightRef = useRef(false);
+  const loadTodayInFlightRef = useRef(false);
+  const submitInFlightRef = useRef(false);
   const [draftClientEntryId, setDraftClientEntryId] = useState<string | null>(
     null,
   );
@@ -121,22 +126,27 @@ export default function WriteScreen() {
 
   const loadCircles = useCallback(async () => {
     if (!session?.accessToken) return;
+    if (loadCirclesInFlightRef.current) return;
+    loadCirclesInFlightRef.current = true;
     setIsLoading(true);
     setError(null);
     try {
       const result = await bloomApi.listCircles(session.accessToken);
-      setCircles(result.filter((circle) => circle.status === "Sealed"));
+      setCircles(result);
     } catch (loadError) {
       setError(
         loadError instanceof Error ? loadError.message : t("circleLoadFailed"),
       );
     } finally {
+      loadCirclesInFlightRef.current = false;
       setIsLoading(false);
     }
   }, [session?.accessToken, t]);
 
   const loadTodayStatus = useCallback(async () => {
     if (!session?.accessToken) return;
+    if (loadTodayInFlightRef.current) return;
+    loadTodayInFlightRef.current = true;
     setIsTodayStatusLoading(true);
     try {
       setTodayStatus(await bloomApi.getTodayEntry(session.accessToken));
@@ -147,6 +157,7 @@ export default function WriteScreen() {
           : t("todayStatusLoadFailed"),
       );
     } finally {
+      loadTodayInFlightRef.current = false;
       setIsTodayStatusLoading(false);
     }
   }, [session?.accessToken, t]);
@@ -239,20 +250,28 @@ export default function WriteScreen() {
     t,
   ]);
 
+  const editableCircles = useMemo(
+    () => isEditingToday
+      ? circles.filter((circle) => circle.status === "Sealed" || selectedCircleIds.includes(circle.id))
+      : circles.filter((circle) => circle.status === "Sealed"),
+    [circles, isEditingToday, selectedCircleIds],
+  );
   const selectedAvailableCircleIds = useMemo(
-    () => selectedCircleIds.filter((id) => circles.some((circle) => circle.id === id)),
-    [circles, selectedCircleIds],
+    () => isEditingToday
+      ? selectedCircleIds
+      : selectedCircleIds.filter((id) => editableCircles.some((circle) => circle.id === id)),
+    [editableCircles, isEditingToday, selectedCircleIds],
   );
   const selectedCount = selectedAvailableCircleIds.length;
   const allCirclesSelected =
-    circles.length > 0 &&
-    circles.every((circle) => selectedCircleIds.includes(circle.id));
+    editableCircles.length > 0 &&
+    editableCircles.every((circle) => selectedCircleIds.includes(circle.id));
   const canSubmit =
     Boolean(session?.accessToken) &&
     !isSubmitting &&
     !isTodayStatusLoading &&
     Boolean(text.trim()) &&
-    (isEditingToday || selectedAvailableCircleIds.length > 0) &&
+    selectedAvailableCircleIds.length > 0 &&
     (isEditingToday || !todayStatus?.hasEntry);
 
   const toggleCircle = useCallback((circleId: string) => {
@@ -265,12 +284,12 @@ export default function WriteScreen() {
 
   const toggleAllCircles = useCallback(() => {
     setSelectedCircleIds((current) =>
-      circles.length > 0 &&
-      circles.every((circle) => current.includes(circle.id))
+      editableCircles.length > 0 &&
+      editableCircles.every((circle) => current.includes(circle.id))
         ? []
-        : circles.map((circle) => circle.id),
+        : editableCircles.map((circle) => circle.id),
     );
-  }, [circles]);
+  }, [editableCircles]);
 
   const clearEditor = useCallback(async () => {
     setText("");
@@ -279,6 +298,7 @@ export default function WriteScreen() {
     setSelectedCircleIds([]);
     photoIdentityByUri.current.clear();
     setImageUris([]);
+    setImageMediaIds([]);
     setDraftClientEntryId(null);
     if (currentDraftKey) {
       skipNextDraftSave.current = true;
@@ -294,16 +314,23 @@ export default function WriteScreen() {
       promptKey,
       selectedCircleIds: selectedCircleIds.slice(),
       imageUris: imageUris.slice(),
+      imageMediaIds: imageMediaIds.slice(),
       draftClientEntryId,
     };
     setText(todayStatus.text ?? "");
     setMood(todayStatus.mood ?? undefined);
     setPromptKey(todayStatus.promptKey ?? undefined);
     setSelectedCircleIds(todayStatus.circleIds);
+    const existingMediaIds = todayStatus.mediaIds ?? [];
+    setImageMediaIds(existingMediaIds);
+    setImageUris(existingMediaIds.map((id) => bloomApi.mediaUrl(id)));
+    photoIdentityByUri.current = new Map(
+      existingMediaIds.map((id) => [bloomApi.mediaUrl(id), `media:${id}`]),
+    );
     setIsEditingToday(true);
     setError(null);
     setNotice(null);
-  }, [draftClientEntryId, imageUris, mood, promptKey, selectedCircleIds, text, todayStatus]);
+  }, [draftClientEntryId, imageMediaIds, imageUris, mood, promptKey, selectedCircleIds, text, todayStatus]);
 
   const cancelEditingToday = useCallback(() => {
     const snapshot = editingSnapshot.current;
@@ -313,9 +340,10 @@ export default function WriteScreen() {
       setPromptKey(snapshot.promptKey);
       setSelectedCircleIds(snapshot.selectedCircleIds);
       setImageUris(snapshot.imageUris);
+      setImageMediaIds(snapshot.imageMediaIds);
       setDraftClientEntryId(snapshot.draftClientEntryId);
       photoIdentityByUri.current = new Map(
-        snapshot.imageUris.map((uri) => [uri, `uri:${uri}`]),
+        snapshot.imageUris.map((uri, index) => [uri, snapshot.imageMediaIds[index] ? `media:${snapshot.imageMediaIds[index]}` : `uri:${uri}`]),
       );
     }
     editingSnapshot.current = null;
@@ -362,13 +390,15 @@ export default function WriteScreen() {
 
   const submit = useCallback(async () => {
     if (!session?.accessToken) return;
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     if (isTodayStatusLoading || (todayStatus?.hasEntry && !isEditingToday))
       return;
     if (!text.trim()) {
       setError(t("writeBeforeSealing"));
       return;
     }
-    if (!isEditingToday && selectedAvailableCircleIds.length === 0) {
+    if (selectedAvailableCircleIds.length === 0) {
       setError(t("chooseSealedCircle"));
       return;
     }
@@ -378,11 +408,13 @@ export default function WriteScreen() {
     setNotice(null);
     try {
       if (isEditingToday) {
-        await bloomApi.updateTodayEntry(session.accessToken, {
+        await bloomApi.updateTodayEntryWithMedia(session.accessToken, {
           text: text.trim(),
           mood,
           promptKey,
-        });
+          circleIds: selectedAvailableCircleIds,
+          retainedMediaIds: imageMediaIds.filter((id): id is string => Boolean(id)),
+        }, imageUris.filter((_, index) => !imageMediaIds[index]));
         editingSnapshot.current = null;
         setIsEditingToday(false);
         await clearEditor();
@@ -425,6 +457,7 @@ export default function WriteScreen() {
         );
       }
     } finally {
+      submitInFlightRef.current = false;
       setIsSubmitting(false);
     }
   }, [
@@ -432,10 +465,10 @@ export default function WriteScreen() {
     clearEditor,
     draftClientEntryId,
     imageUris,
+    imageMediaIds,
     localDate,
     mood,
     promptKey,
-    selectedCircleIds,
     selectedAvailableCircleIds,
     session?.accessToken,
     text,
@@ -468,6 +501,7 @@ export default function WriteScreen() {
             uri: await normalizeSelectedImage(asset),
           })),
         );
+        const acceptedUris: string[] = [];
         setImageUris((current) => {
           const next = [...current];
           const selectedIdentities = new Set(photoIdentityByUri.current.values());
@@ -475,11 +509,15 @@ export default function WriteScreen() {
             const identity = getPhotoIdentity(asset);
             if (selectedIdentities.has(identity) || next.length >= 10) continue;
             next.push(uri);
+            acceptedUris.push(uri);
             photoIdentityByUri.current.set(uri, identity);
             selectedIdentities.add(identity);
           }
           return next;
         });
+        if (acceptedUris.length > 0) {
+          setImageMediaIds((current) => [...current, ...acceptedUris.map(() => null)]);
+        }
       } catch {
         setError(t("photoProcessingFailed"));
       }
@@ -489,7 +527,11 @@ export default function WriteScreen() {
   const removeImage = useCallback((uri: string) => {
     photoIdentityByUri.current.delete(uri);
     setImageUris((current) => current.filter((item) => item !== uri));
-  }, []);
+    setImageMediaIds((current) => {
+      const index = imageUris.indexOf(uri);
+      return index < 0 ? current : current.filter((_, itemIndex) => itemIndex !== index);
+    });
+  }, [imageUris]);
 
   return (
     <Screen onRefresh={() => void refresh()} refreshing={isRefreshing}>
@@ -630,12 +672,8 @@ export default function WriteScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("attachPhotoAccessibility")}
-            disabled={isEditingToday}
             onPress={() => void pickImage()}
-            style={[
-              styles.photoButton,
-              isEditingToday ? styles.submitDisabled : null,
-            ]}
+            style={styles.photoButton}
           >
             <Text style={styles.photoButtonText}>
               {imageUris.length > 0
@@ -654,7 +692,9 @@ export default function WriteScreen() {
                   <Image
                     accessibilityLabel={`${t("selectedDiaryPhoto")} ${index + 1}`}
                     contentFit="cover"
-                    source={uri}
+                    source={imageMediaIds[index]
+                      ? { uri, headers: session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : undefined }
+                      : uri}
                     style={styles.photoPreview}
                   />
                   <Pressable
@@ -673,7 +713,6 @@ export default function WriteScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("choosePrompt")}
-            disabled={isEditingToday}
             onPress={() => {
               const currentIndex = PROMPTS.findIndex(
                 (prompt) => prompt.key === promptKey,
@@ -699,14 +738,13 @@ export default function WriteScreen() {
             <Text style={[styles.section, styles.sectionInRow]}>
               {t("sealTo")}
             </Text>
-            {circles.length > 0 ? (
+            {editableCircles.length > 0 ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={
                   allCirclesSelected ? t("clearAll") : t("selectAll")
                 }
                 onPress={toggleAllCircles}
-                disabled={isEditingToday}
               >
                 <Text style={styles.selectAll}>
                   {allCirclesSelected ? t("clearAll") : t("selectAll")}
@@ -715,7 +753,7 @@ export default function WriteScreen() {
             ) : null}
           </View>
           {isLoading ? <ActivityIndicator color={colors.coralDark} /> : null}
-          {!isLoading && circles.length === 0 ? (
+          {!isLoading && editableCircles.length === 0 ? (
             <View style={styles.emptyCircleCard}>
               <View style={styles.emptyCircleIcon}>
                 <MaterialCommunityIcons
@@ -736,7 +774,7 @@ export default function WriteScreen() {
               </Pressable>
             </View>
           ) : null}
-          {circles.map((circle) => {
+          {editableCircles.map((circle) => {
             const selected = selectedCircleIds.includes(circle.id);
             return (
               <Pressable
@@ -745,7 +783,6 @@ export default function WriteScreen() {
                 accessibilityState={{ checked: selected }}
                 key={circle.id}
                 onPress={() => toggleCircle(circle.id)}
-                disabled={isEditingToday}
                 style={[styles.circle, selected ? styles.circleSelected : null]}
               >
                 <Text style={styles.circleEmoji}>{circle.emoji}</Text>

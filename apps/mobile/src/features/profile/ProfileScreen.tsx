@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DateTimePicker, {
   type DateTimePickerChangeEvent,
 } from "@react-native-community/datetimepicker";
@@ -44,8 +44,12 @@ export default function ProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const loadInFlightRef = useRef(false);
+  const saveInFlightRef = useRef(false);
+  const deleteAccountInFlightRef = useRef(false);
   const [sheet, setSheet] = useState<
     "profile" | "language" | "reminder" | null
   >(null);
@@ -80,6 +84,8 @@ export default function ProfileScreen() {
   const loadStats = useCallback(
     async (refresh = false) => {
       if (!session?.accessToken) return;
+      if (loadInFlightRef.current) return;
+      loadInFlightRef.current = true;
       refresh ? setIsRefreshing(true) : setIsLoading(true);
       setError(null);
       try {
@@ -89,6 +95,7 @@ export default function ProfileScreen() {
           loadError instanceof Error ? loadError.message : t("statsLoadFailed"),
         );
       } finally {
+        loadInFlightRef.current = false;
         setIsLoading(false);
         setIsRefreshing(false);
       }
@@ -105,6 +112,8 @@ export default function ProfileScreen() {
 
   const save = useCallback(async () => {
     if (!session?.accessToken) return;
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
     setIsSaving(true);
     setError(null);
     setNotice(null);
@@ -123,6 +132,7 @@ export default function ProfileScreen() {
         saveError instanceof Error ? saveError.message : t("profileSaveFailed"),
       );
     } finally {
+      saveInFlightRef.current = false;
       setIsSaving(false);
     }
   }, [displayName, session?.accessToken, t, updateUser]);
@@ -136,8 +146,19 @@ export default function ProfileScreen() {
         style: "destructive",
         onPress: () =>
           void (async () => {
-            await bloomApi.deleteAccount(session.accessToken);
-            await signOut();
+            if (deleteAccountInFlightRef.current) return;
+            deleteAccountInFlightRef.current = true;
+            setIsDeletingAccount(true);
+            setError(null);
+            try {
+              await bloomApi.deleteAccount(session.accessToken);
+              await signOut();
+            } catch (deleteError) {
+              setError(deleteError instanceof Error ? deleteError.message : t("requestFailed"));
+            } finally {
+              deleteAccountInFlightRef.current = false;
+              setIsDeletingAccount(false);
+            }
           })(),
       },
     ]);
@@ -244,6 +265,7 @@ export default function ProfileScreen() {
       <Pressable
         accessibilityRole="button"
         onPress={() => void signOut()}
+        disabled={isDeletingAccount}
         style={styles.signOut}
       >
         <Text style={styles.signOutText}>{t("signOut")}</Text>

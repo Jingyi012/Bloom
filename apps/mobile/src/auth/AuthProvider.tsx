@@ -11,7 +11,7 @@ import {
   type PropsWithChildren,
 } from "react";
 import Constants from "expo-constants";
-import { bloomApi } from "@/api/client";
+import { bloomApi, configureSessionRefresh } from "@/api/client";
 import { clearSession, readSession, writeSession } from "@/auth/session";
 import type { CurrentUserResponse } from "@/types/api";
 import type { StoredSession } from "@/types/session";
@@ -53,6 +53,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<StoredSession | null>(null);
   const [user, setUser] = useState<CurrentUserResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const refreshAccessToken = useCallback(async (): Promise<string | null> => {
+    const stored = await readSession();
+    if (!stored) return null;
+    try {
+      const refreshed = await bloomApi.refresh(stored.refreshToken);
+      const nextSession = {
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken,
+      };
+      await writeSession(nextSession);
+      setSession(nextSession);
+      return nextSession.accessToken;
+    } catch {
+      await clearSession();
+      setSession(null);
+      setUser(null);
+      return null;
+    }
+  }, []);
+
+  useEffect(() => configureSessionRefresh(refreshAccessToken), [refreshAccessToken]);
 
   useEffect(() => {
     let mounted = true;

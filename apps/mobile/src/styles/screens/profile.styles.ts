@@ -49,7 +49,7 @@ export const profileStyles = StyleSheet.create({
   danger: { alignItems: 'center', borderColor: colors.coralDark, borderRadius: 13, borderWidth: 1, marginTop: 14, minHeight: 44, justifyContent: 'center' },
   dangerText: { color: colors.coralDark, fontFamily: typography.uiBold, fontSize: 14 },
   sheetBackdrop: { backgroundColor: 'rgba(51,38,46,0.35)', flex: 1, justifyContent: 'flex-end' },
-  sheet: { backgroundColor: colors.background, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 34 },
+  sheet: { backgroundColor: colors.background, borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: "88%", padding: 24, paddingBottom: 34 },
   sheetHandle: { alignSelf: 'center', backgroundColor: colors.line, borderRadius: 4, height: 5, marginBottom: 18, width: 42 },
   sheetHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 18 },
   sheetTitle: { color: colors.ink, fontFamily: typography.display, fontSize: 22 },

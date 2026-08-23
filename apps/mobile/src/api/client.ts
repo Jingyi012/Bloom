@@ -28,6 +28,29 @@ const apiUrl =
   process.env.EXPO_PUBLIC_API_URL ??
   "http://127.0.0.1:5052/api/v1";
 
+const API_REQUEST_TIMEOUT_MS = 20_000;
+type SessionRefreshHandler = () => Promise<string | null>;
+let sessionRefreshHandler: SessionRefreshHandler | null = null;
+let sessionRefreshInFlight: Promise<string | null> | null = null;
+
+/** Registers the auth provider's refresh callback for transparent 401 recovery. */
+export function configureSessionRefresh(handler: SessionRefreshHandler): () => void {
+  sessionRefreshHandler = handler;
+  return () => {
+    if (sessionRefreshHandler === handler) sessionRefreshHandler = null;
+  };
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (!sessionRefreshHandler) return null;
+  if (!sessionRefreshInFlight) {
+    sessionRefreshInFlight = sessionRefreshHandler().finally(() => {
+      sessionRefreshInFlight = null;
+    });
+  }
+  return sessionRefreshInFlight;
+}
+
 async function getApiErrorMessage(response: Response): Promise<string> {
   const fallback = `Bloom API request failed (${response.status})`;
   const body = await response.text();
@@ -50,7 +73,7 @@ async function getApiErrorMessage(response: Response): Promise<string> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiUrl}${path}`, {
+  const response = await fetchApi(path, {
     ...init,
     headers: {
       Accept: "application/json",
@@ -70,9 +93,10 @@ async function requestMultipart<T>(
   path: string,
   formData: FormData,
   accessToken: string,
+  method: "POST" | "PATCH" = "POST",
 ): Promise<T> {
-  const response = await fetch(`${apiUrl}${path}`, {
-    method: "POST",
+  const response = await fetchApi(path, {
+    method,
     body: formData,
     headers: {
       Accept: "application/json",
@@ -83,6 +107,39 @@ async function requestMultipart<T>(
   return response.status === 204
     ? (undefined as T)
     : ((await response.json()) as T);
+}
+
+async function fetchApi(path: string, init: RequestInit, canRefresh = true): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(`${apiUrl}${path}`, init);
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Bloom request timed out. Check your connection and try again.");
+    }
+    throw error;
+  }
+
+  const authorization = new Headers(init.headers).get("Authorization");
+  if (response.status !== 401 || !canRefresh || path.startsWith("/auth/") || !authorization?.startsWith("Bearer ")) {
+    return response;
+  }
+
+  const nextAccessToken = await refreshAccessToken();
+  if (!nextAccessToken) return response;
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${nextAccessToken}`);
+  return fetchApi(path, { ...init, headers }, false);
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export const bloomApi = {
@@ -188,6 +245,38 @@ export const bloomApi = {
       body: JSON.stringify(request),
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
+  updateTodayEntryWithMedia: (
+    accessToken: string,
+    request: UpdateTodayEntryRequest & { circleIds: string[]; retainedMediaIds: string[] },
+    imageUris: string[],
+  ) => {
+    const formData = new FormData();
+    formData.append("text", request.text);
+    if (request.mood) formData.append("mood", request.mood);
+    if (request.promptKey) formData.append("promptKey", request.promptKey);
+    formData.append("circleIds", request.circleIds.join(","));
+    formData.append("retainedMediaIds", request.retainedMediaIds.join(","));
+    imageUris.forEach((imageUri, index) => {
+      const extension = imageUri.split("?")[0]?.split(".").pop()?.toLowerCase();
+      const type =
+        extension === "png"
+          ? "image/png"
+          : extension === "heic" || extension === "heif"
+            ? "image/heic"
+            : "image/jpeg";
+      formData.append("images", {
+        uri: imageUri,
+        name: `bloom-entry-edit-${index + 1}.${extension || "jpg"}`,
+        type,
+      } as unknown as Blob);
+    });
+    return requestMultipart<TodayEntryStatus>(
+      "/entries/today/with-media",
+      formData,
+      accessToken,
+      "PATCH",
+    );
+  },
   deleteTodayEntry: (accessToken: string) =>
     requestJson<void>("/entries/today", {
       method: "DELETE",

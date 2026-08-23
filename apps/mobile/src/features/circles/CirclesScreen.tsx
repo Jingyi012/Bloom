@@ -1,6 +1,6 @@
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DateTimePicker, {
   type DateTimePickerChangeEvent,
 } from "@react-native-community/datetimepicker";
@@ -58,10 +58,15 @@ export default function CirclesScreen() {
   const [bloomAt, setBloomAt] = useState<Date>(getDefaultBloomDate);
   const [pickerMode, setPickerMode] = useState<"date" | "time" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const loadInFlightRef = useRef(false);
+  const createInFlightRef = useRef(false);
+  const invitationInFlightRef = useRef(new Set<string>());
 
   const load = useCallback(
     async (refresh = false) => {
       if (!session?.accessToken) return;
+      if (loadInFlightRef.current) return;
+      loadInFlightRef.current = true;
       refresh ? setIsRefreshing(true) : setIsLoading(true);
       setError(null);
       try {
@@ -78,6 +83,7 @@ export default function CirclesScreen() {
             : t("circleLoadFailed"),
         );
       } finally {
+        loadInFlightRef.current = false;
         setIsLoading(false);
         setIsRefreshing(false);
       }
@@ -94,6 +100,8 @@ export default function CirclesScreen() {
       setError(t("circleNameRequired"));
       return;
     }
+    if (createInFlightRef.current) return;
+    createInFlightRef.current = true;
     setIsCreating(true);
     setError(null);
     try {
@@ -115,6 +123,7 @@ export default function CirclesScreen() {
           : t("circleCreateFailed"),
       );
     } finally {
+      createInFlightRef.current = false;
       setIsCreating(false);
     }
   }, [bloomAt, deviceTimeZone, emoji, load, name, session?.accessToken, t]);
@@ -132,6 +141,8 @@ export default function CirclesScreen() {
   const respond = useCallback(
     async (invitationId: string, accept: boolean) => {
       if (!session?.accessToken) return;
+      if (invitationInFlightRef.current.has(invitationId)) return;
+      invitationInFlightRef.current.add(invitationId);
       try {
         await bloomApi.respondToCircleInvitation(
           session.accessToken,
@@ -143,8 +154,10 @@ export default function CirclesScreen() {
         setError(
           responseError instanceof Error
             ? responseError.message
-            : t("invitationUpdateFailed"),
+          : t("invitationUpdateFailed"),
         );
+      } finally {
+        invitationInFlightRef.current.delete(invitationId);
       }
     },
     [load, session?.accessToken, t],

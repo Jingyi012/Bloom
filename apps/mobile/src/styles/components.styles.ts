@@ -3,6 +3,7 @@ import { colors, shadows, spacing, typography } from '@/styles/tokens';
 
 export const screenStyles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
+  keyboardRoot: { flex: 1 },
   content: { flexGrow: 1, padding: spacing.xl, backgroundColor: colors.background },
 });
 

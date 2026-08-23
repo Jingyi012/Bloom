@@ -57,6 +57,56 @@ public sealed class EntriesController(IEntryService entryService, IOptions<Image
         }
         catch (ArgumentException exception) { return BadRequest(exception.Message); }
         catch (KeyNotFoundException exception) { return NotFound(exception.Message); }
+        catch (UnauthorizedAccessException exception) { return StatusCode(StatusCodes.Status403Forbidden, exception.Message); }
+        catch (InvalidOperationException exception) { return Conflict(exception.Message); }
+    }
+
+    /// <summary>Updates today's diary and replaces its local image attachments.</summary>
+    [HttpPatch("today/with-media")]
+    [RequestSizeLimit(51 * 1024 * 1024)]
+    [ProducesResponseType(typeof(TodayEntryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<TodayEntryResponse>> UpdateTodayWithMediaAsync(
+        [FromForm] string text,
+        [FromForm] string? mood,
+        [FromForm] string? promptKey,
+        [FromForm] string circleIds,
+        [FromForm] string? retainedMediaIds,
+        List<IFormFile>? images,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        if (string.IsNullOrWhiteSpace(text)) return BadRequest("Entry text is required.");
+        if (images is not null && images.Count > 10) return BadRequest("You can attach up to 10 images.");
+        if (images is not null && images.Any(image => image.Length <= 0 || image.Length > _maxImageBytes))
+            return BadRequest($"Each image must be between 1 and {_maxImageBytes / (1024 * 1024)} MB.");
+        Guid[] parsedCircleIds;
+        Guid[] parsedMediaIds;
+        try
+        {
+            parsedCircleIds = circleIds
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(Guid.Parse)
+                .ToArray();
+            parsedMediaIds = (retainedMediaIds ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(Guid.Parse)
+                .ToArray();
+        }
+        catch (FormatException) { return BadRequest("Circle or media ids are invalid."); }
+
+        try
+        {
+            var uploads = (images ?? []).Select(image => new ImageUpload(image.OpenReadStream(), image.ContentType)).ToArray();
+            var status = await _entryService.UpdateTodayWithMediaAsync(userId, text, mood, promptKey, parsedCircleIds, parsedMediaIds, uploads, cancellationToken).ConfigureAwait(false);
+            return Ok(ToTodayResponse(status));
+        }
+        catch (ArgumentException exception) { return BadRequest(exception.Message); }
+        catch (KeyNotFoundException exception) { return NotFound(exception.Message); }
+        catch (UnauthorizedAccessException exception) { return StatusCode(StatusCodes.Status403Forbidden, exception.Message); }
         catch (InvalidOperationException exception) { return Conflict(exception.Message); }
     }
 
@@ -287,9 +337,10 @@ public sealed class EntriesController(IEntryService entryService, IOptions<Image
         status.HasEntry,
         status.AuthorLocalDate,
         status.DiaryEntryId,
-        status.SubmittedAtUtc,
-        status.CircleIds,
-        status.Text,
+            status.SubmittedAtUtc,
+            status.CircleIds,
+            status.MediaIds,
+            status.Text,
         status.Mood,
         status.PromptKey,
         status.CanModify,

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import {
   ActivityIndicator,
   Alert,
   Pressable,
   Platform,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -45,10 +46,17 @@ export default function CircleDetailScreen() {
   const [showDeleteSheet, setShowDeleteSheet] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  const loadInFlightRef = useRef(false);
+  const saveInFlightRef = useRef(false);
+  const deleteInFlightRef = useRef(false);
+  const inviteInFlightRef = useRef(false);
+  const leaveInFlightRef = useRef(false);
 
   const load = useCallback(
     async (refresh = false) => {
       if (!session?.accessToken || !circleId) return;
+      if (loadInFlightRef.current) return;
+      loadInFlightRef.current = true;
       refresh ? setIsRefreshing(true) : setIsLoading(true);
       setError(null);
       try {
@@ -60,6 +68,7 @@ export default function CircleDetailScreen() {
             : t("circleLoadDetailFailed"),
         );
       } finally {
+        loadInFlightRef.current = false;
         setIsLoading(false);
         setIsRefreshing(false);
       }
@@ -82,6 +91,8 @@ export default function CircleDetailScreen() {
 
   const saveCircle = useCallback(async () => {
     if (!session?.accessToken || !circleId || !detail || !editName.trim()) return;
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
     setIsSaving(true);
     setError(null);
     setNotice(null);
@@ -98,6 +109,7 @@ export default function CircleDetailScreen() {
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : t("circleSaveFailed"));
     } finally {
+      saveInFlightRef.current = false;
       setIsSaving(false);
     }
   }, [circleId, detail, editBloomAt, editEmoji, editName, session?.accessToken, t]);
@@ -118,6 +130,8 @@ export default function CircleDetailScreen() {
 
   const confirmDelete = useCallback(async () => {
     if (!session?.accessToken || !circleId || !detail || deleteConfirmation.trim() !== detail.circle.name.trim()) return;
+    if (deleteInFlightRef.current) return;
+    deleteInFlightRef.current = true;
     setIsDeleting(true);
     setError(null);
     try {
@@ -127,6 +141,7 @@ export default function CircleDetailScreen() {
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : t("circleSaveFailed"));
     } finally {
+      deleteInFlightRef.current = false;
       setIsDeleting(false);
     }
   }, [circleId, deleteConfirmation, detail, router, session?.accessToken, t]);
@@ -145,6 +160,8 @@ export default function CircleDetailScreen() {
 
   const invite = useCallback(async () => {
     if (!session?.accessToken || !circleId || !email.trim()) return;
+    if (inviteInFlightRef.current) return;
+    inviteInFlightRef.current = true;
     setIsBusy(true);
     setError(null);
     setNotice(null);
@@ -162,6 +179,7 @@ export default function CircleDetailScreen() {
         inviteError instanceof Error ? inviteError.message : t("inviteFailed"),
       );
     } finally {
+      inviteInFlightRef.current = false;
       setIsBusy(false);
     }
   }, [circleId, email, load, session?.accessToken, t]);
@@ -175,6 +193,8 @@ export default function CircleDetailScreen() {
         style: "destructive",
         onPress: () =>
           void (async () => {
+            if (leaveInFlightRef.current) return;
+            leaveInFlightRef.current = true;
             setIsBusy(true);
             try {
               await bloomApi.leaveCircle(session.accessToken, circleId);
@@ -186,6 +206,7 @@ export default function CircleDetailScreen() {
                   : t("leaveFailed"),
               );
             } finally {
+              leaveInFlightRef.current = false;
               setIsBusy(false);
             }
           })(),
@@ -365,6 +386,7 @@ export default function CircleDetailScreen() {
         sheetStyle={styles.sheet}
         visible={showEditSheet}
       >
+        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{t("editCircle")}</Text>
@@ -409,6 +431,7 @@ export default function CircleDetailScreen() {
             <Pressable accessibilityRole="button" disabled={isSaving || !editName.trim()} onPress={() => void saveCircle()} style={[styles.saveButton, isSaving ? styles.saveButtonDisabled : null]}>
               {isSaving ? <ActivityIndicator color={colors.card} /> : <Text style={styles.saveButtonText}>{t("saveCircle")}</Text>}
             </Pressable>
+        </ScrollView>
       </BottomSheet>
       <BottomSheet
         backdropStyle={styles.sheetBackdrop}
@@ -416,6 +439,7 @@ export default function CircleDetailScreen() {
         sheetStyle={styles.sheet}
         visible={showDeleteSheet}
       >
+        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{t("deleteCircleTitle")}</Text>
@@ -429,6 +453,7 @@ export default function CircleDetailScreen() {
             <Pressable accessibilityRole="button" disabled={isDeleting || deleteConfirmation.trim() !== circle.name.trim()} onPress={() => void confirmDelete()} style={[styles.deleteButton, isDeleting || deleteConfirmation.trim() !== circle.name.trim() ? styles.saveButtonDisabled : null]}>
               {isDeleting ? <ActivityIndicator color={colors.card} /> : <Text style={styles.deleteButtonText}>{t("deleteCircle")}</Text>}
             </Pressable>
+        </ScrollView>
       </BottomSheet>
     </Screen>
   );

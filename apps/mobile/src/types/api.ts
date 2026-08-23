@@ -113,6 +113,7 @@ export type TodayEntryStatus = {
   diaryEntryId: string | null;
   submittedAtUtc: string | null;
   circleIds: string[];
+  mediaIds: string[];
   text: string | null;
   mood: string | null;
   promptKey: string | null;

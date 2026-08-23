@@ -18,9 +18,19 @@ public sealed class EfMediaService(BloomDbContext db, IEntryService entryService
         // One upload belongs to the diary entry and is visible through any of that
         // entry's circle publications. Authorize the asset when any publication is visible.
         var asset = await _db.MediaAssets.AsNoTracking()
-            .SingleOrDefaultAsync(candidate => candidate.Id == mediaId && candidate.DeletedAtUtc == null, cancellationToken)
+            .FirstOrDefaultAsync(candidate => candidate.Id == mediaId && candidate.DeletedAtUtc == null, cancellationToken)
             .ConfigureAwait(false);
         if (asset is null) return null;
+
+        // Authors may preview and edit their own attachments before the circle
+        // blooms. Other users must still go through the normal publication gate.
+        var isAuthor = await _db.DiaryEntries.AsNoTracking()
+            .AnyAsync(entry => entry.Id == asset.DiaryEntryId && entry.AuthorUserId == userId && entry.DeletedAtUtc == null, cancellationToken)
+            .ConfigureAwait(false);
+        if (isAuthor)
+        {
+            return new MediaContent(await _imageStorage.ReadAsync(asset.RelativePath, cancellationToken).ConfigureAwait(false), asset.ContentType);
+        }
 
         var publicationIds = await _db.EntryPublications.AsNoTracking()
             .Where(candidate => candidate.DiaryEntryId == asset.DiaryEntryId)

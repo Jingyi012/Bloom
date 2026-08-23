@@ -58,6 +58,7 @@ export default function BloomTimelineScreen() {
   const [draftDate, setDraftDate] = useState<Date | null>(null);
   const [draftAuthorId, setDraftAuthorId] = useState<string | null>(null);
   const loadingMoreRef = useRef(false);
+  const reactionInFlightRef = useRef(new Set<string>());
 
   const load = useCallback(
     async (refresh = false) => {
@@ -227,6 +228,12 @@ export default function BloomTimelineScreen() {
   const updateReaction = useCallback(
     async (entry: TimelineEntry, code: ReactionCode) => {
       if (!session?.accessToken) return;
+      // A fast double tap can otherwise issue add/remove requests against the
+      // same stale reaction state. Serialize reaction changes per post until
+      // the server has returned the authoritative result.
+      if (reactionInFlightRef.current.has(entry.publicationId)) return;
+      reactionInFlightRef.current.add(entry.publicationId);
+      setError(null);
       const current = entry.reactions.find(
         (reaction) => reaction.emojiCode === code,
       );
@@ -264,8 +271,10 @@ export default function BloomTimelineScreen() {
         setError(
           reactionError instanceof Error
             ? reactionError.message
-            : t("reactionUpdateFailed"),
+          : t("reactionUpdateFailed"),
         );
+      } finally {
+        reactionInFlightRef.current.delete(entry.publicationId);
       }
     },
     [session?.accessToken, t],

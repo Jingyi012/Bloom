@@ -31,10 +31,15 @@ export default function EntryDetailScreen() {
   const [isPosting, setIsPosting] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const suppressNextReactionPress = useRef(false);
+  const reactionInFlightRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const loadInFlightRef = useRef(false);
+  const commentInFlightRef = useRef(false);
 
   const load = useCallback(async (refresh = false) => {
     if (!session?.accessToken || !publicationId) return;
+    if (loadInFlightRef.current) return;
+    loadInFlightRef.current = true;
     refresh ? setIsRefreshing(true) : setIsLoading(true);
     setError(null);
     try {
@@ -49,6 +54,7 @@ export default function EntryDetailScreen() {
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : t('entryLoadFailed'));
     } finally {
+      loadInFlightRef.current = false;
       setIsLoading(false);
       setIsRefreshing(false);
     }
@@ -60,6 +66,9 @@ export default function EntryDetailScreen() {
 
   const updateReaction = useCallback(async (code: ReactionCode) => {
     if (!session?.accessToken || !entry) return;
+    if (reactionInFlightRef.current) return;
+    reactionInFlightRef.current = true;
+    setError(null);
     const current = entry.reactions.find((reaction) => reaction.emojiCode === code);
     try {
       const result = current?.reactedByCurrentUser
@@ -75,6 +84,8 @@ export default function EntryDetailScreen() {
       setShowReactionPicker(false);
     } catch (reactionError) {
       setError(reactionError instanceof Error ? reactionError.message : t('reactionUpdateFailed'));
+    } finally {
+      reactionInFlightRef.current = false;
     }
   }, [entry, session?.accessToken, t]);
 
@@ -84,6 +95,8 @@ export default function EntryDetailScreen() {
   const addComment = useCallback(async () => {
     const body = draft.trim();
     if (!body || !session?.accessToken || !entry || isPosting) return;
+    if (commentInFlightRef.current) return;
+    commentInFlightRef.current = true;
     setIsPosting(true);
     setError(null);
     try {
@@ -94,6 +107,7 @@ export default function EntryDetailScreen() {
     } catch (commentError) {
       setError(commentError instanceof Error ? commentError.message : t('commentAddFailed'));
     } finally {
+      commentInFlightRef.current = false;
       setIsPosting(false);
     }
   }, [draft, entry, isPosting, session?.accessToken, t]);

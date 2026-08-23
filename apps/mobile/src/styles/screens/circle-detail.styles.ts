@@ -42,7 +42,7 @@ export const circleDetailStyles = StyleSheet.create({
   loading: { alignItems: 'center', flex: 1, justifyContent: 'center' },
   error: { color: colors.coralDark, fontFamily: typography.ui, fontSize: 13, lineHeight: 20, marginTop: spacing.lg },
   sheetBackdrop: { backgroundColor: 'rgba(51,38,46,0.35)', flex: 1, justifyContent: 'flex-end' },
-  sheet: { backgroundColor: colors.background, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: spacing.xl, paddingBottom: 34 },
+  sheet: { backgroundColor: colors.background, borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: "88%", padding: spacing.xl, paddingBottom: 34 },
   sheetHandle: { alignSelf: 'center', backgroundColor: colors.line, borderRadius: 4, height: 5, marginBottom: spacing.lg, width: 42 },
   sheetHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.lg },
   sheetTitle: { color: colors.ink, fontFamily: typography.display, fontSize: 22 },

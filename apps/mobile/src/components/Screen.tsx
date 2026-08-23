@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { screenStyles } from "@/styles/components.styles";
@@ -25,16 +25,23 @@ export function Screen({
       style={screenStyles.safeArea}
       edges={["top", "left", "right"]}
     >
-      {scroll ? (
-        <ScrollView
-          contentInsetAdjustmentBehavior="automatic"
-          refreshControl={onRefresh ? <RefreshControl onRefresh={onRefresh} refreshing={refreshing} /> : undefined}
-        >
-          {content}
-        </ScrollView>
-      ) : (
-        content
-      )}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+        style={screenStyles.keyboardRoot}
+      >
+        {scroll ? (
+          <ScrollView
+            contentInsetAdjustmentBehavior="automatic"
+            keyboardShouldPersistTaps="handled"
+            refreshControl={onRefresh ? <RefreshControl onRefresh={onRefresh} refreshing={refreshing} /> : undefined}
+          >
+            {content}
+          </ScrollView>
+        ) : (
+          content
+        )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

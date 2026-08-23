@@ -12,6 +12,17 @@ public interface IEntryService
     /// <summary>Updates the current user's diary while today's edit window is open.</summary>
     Task<TodayEntryStatus> UpdateTodayAsync(Guid userId, string text, string? mood, string? promptKey, CancellationToken cancellationToken);
 
+    /// <summary>Updates today's diary and replaces the selected image attachments.</summary>
+    Task<TodayEntryStatus> UpdateTodayWithMediaAsync(
+        Guid userId,
+        string text,
+        string? mood,
+        string? promptKey,
+        IReadOnlyCollection<Guid> circleIds,
+        IReadOnlyCollection<Guid> retainedMediaIds,
+        IReadOnlyCollection<ImageUpload> images,
+        CancellationToken cancellationToken);
+
     /// <summary>Permanently deletes the current user's diary while today's edit window is open.</summary>
     Task<bool> DeleteTodayAsync(Guid userId, CancellationToken cancellationToken);
 
@@ -77,6 +88,7 @@ public sealed record TodayEntryStatus(
     Guid? DiaryEntryId,
     DateTimeOffset? SubmittedAtUtc,
     IReadOnlyList<Guid> CircleIds,
+    IReadOnlyList<Guid> MediaIds,
     string? Text,
     string? Mood,
     string? PromptKey,

@@ -25,6 +25,7 @@ public sealed record TodayEntryResponse(
     Guid? DiaryEntryId,
     DateTimeOffset? SubmittedAtUtc,
     IReadOnlyList<Guid> CircleIds,
+    IReadOnlyList<Guid> MediaIds,
     string? Text,
     string? Mood,
     string? PromptKey,
