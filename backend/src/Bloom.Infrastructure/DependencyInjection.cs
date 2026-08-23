@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddDbContext<BloomDbContext>(options => options.UseNpgsql(connectionString));
         services.AddOptions<ImageStorageOptions>()
             .Bind(configuration.GetSection(ImageStorageOptions.SectionName))
+            .Validate(settings => !string.IsNullOrWhiteSpace(settings.RootPath), "ImageStorage:RootPath is required.")
             .Validate(settings => settings.MaxBytes is > 0 and <= 25 * 1024 * 1024, "ImageStorage:MaxBytes must be between 1 byte and 25 MB.")
             .ValidateOnStart();
         services.AddSingleton<IImageStorage, LocalImageStorage>();

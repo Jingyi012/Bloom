@@ -6,7 +6,10 @@ public sealed class ImageStorageOptions
     /// <summary>Configuration section name.</summary>
     public const string SectionName = "ImageStorage";
 
-    /// <summary>Root folder for encrypted image files.</summary>
+    /// <summary>
+    /// Root folder for encrypted image files. Absolute paths are recommended in
+    /// production; relative paths are resolved from the API process directory.
+    /// </summary>
     public string RootPath { get; set; } = "App_Data/uploads";
 
     /// <summary>Maximum unencrypted upload size.</summary>

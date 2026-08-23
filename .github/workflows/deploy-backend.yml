@@ -1,0 +1,153 @@
+name: Deploy Bloom Backend
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: Target deployment environment
+        required: true
+        type: choice
+        options:
+          - uat
+          - prod
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-bloom-backend-${{ github.event_name == 'workflow_dispatch' && inputs.target_env || 'uat' }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore Bloom.slnx
+
+      - name: Build
+        run: dotnet build Bloom.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Bloom.slnx --configuration Release --no-build --no-restore
+
+  deploy:
+    name: Build and deploy backend
+    needs: verify
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.target_env || 'uat' }}
+    env:
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+      IMAGE_OWNER: ${{ vars.IMAGE_OWNER }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment variables
+        run: |
+          if [ -z "${DEPLOY_PATH}" ]; then
+            echo "DEPLOY_PATH is required in the selected GitHub Environment."
+            exit 1
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve image owner
+        run: |
+          resolved_owner="${IMAGE_OWNER:-${{ github.repository_owner }}}"
+          resolved_owner="$(echo "${resolved_owner}" | tr '[:upper:]' '[:lower:]')"
+          echo "RESOLVED_IMAGE_OWNER=${resolved_owner}" >> "${GITHUB_ENV}"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ env.RESOLVED_IMAGE_OWNER }}/bloom-backend:latest
+            ghcr.io/${{ env.RESOLVED_IMAGE_OWNER }}/bloom-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Configure SSH
+        run: |
+          if [ -z "${{ secrets.VPS_HOST }}" ] || [ -z "${{ secrets.VPS_PORT }}" ] || [ -z "${{ secrets.VPS_USER }}" ] || [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
+            echo "Required secrets: VPS_HOST, VPS_PORT, VPS_USER, VPS_SSH_KEY"
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -T 10 -p "${{ secrets.VPS_PORT }}" -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload deployment manifest
+        run: |
+          ssh -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "mkdir -p '${DEPLOY_PATH}'"
+          scp -P "${{ secrets.VPS_PORT }}" backend/deploy/docker-compose.yml \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${DEPLOY_PATH}/docker-compose.yml"
+          scp -P "${{ secrets.VPS_PORT }}" backend/deploy/.env.example \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${DEPLOY_PATH}/.env.example"
+
+      - name: Pull and restart backend
+        run: |
+          ssh -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" 'bash -s' -- "${DEPLOY_PATH}" "${RESOLVED_IMAGE_OWNER}" <<'EOF'
+          set -euo pipefail
+          deploy_path="$1"
+          image_owner="$2"
+          cd "${deploy_path}"
+
+          test -f ./.env || { echo "Missing ${deploy_path}/.env. Copy from .env.example and configure it."; exit 1; }
+          sed -i 's/\r$//' ./.env
+          set -a
+          . ./.env
+          set +a
+          test -n "${BLOOM_UPLOADS_PATH:-}" || { echo "BLOOM_UPLOADS_PATH is required in .env"; exit 1; }
+          case "${BLOOM_UPLOADS_PATH}" in /*) ;; *) echo "BLOOM_UPLOADS_PATH must be absolute"; exit 1 ;; esac
+          mkdir -p "${BLOOM_UPLOADS_PATH}"
+
+          IMAGE_OWNER="${image_owner}" BACKEND_IMAGE_TAG=latest docker compose pull db api
+          IMAGE_OWNER="${image_owner}" BACKEND_IMAGE_TAG=latest docker compose up -d db api
+
+          api_container_id="$(docker compose ps -q api)"
+          test -n "${api_container_id}" || { docker compose ps -a; exit 1; }
+          api_status="$(docker inspect -f '{{.State.Status}}' "${api_container_id}" 2>/dev/null || echo unknown)"
+          if [ "${api_status}" != "running" ]; then
+            docker compose ps -a || true
+            docker compose logs api --tail 200 || true
+            exit 1
+          fi
+          docker compose ps
+          EOF

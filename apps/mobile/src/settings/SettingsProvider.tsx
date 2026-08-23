@@ -58,7 +58,8 @@ const translations = {
     bloomed: "Bloomed",
     signOut: "Sign out",
     dangerZone: "Danger zone",
-    dangerBody: "Deleting your account deactivates it and revokes your active sessions.",
+    dangerBody:
+      "Deleting your account deactivates it and revokes your active sessions.",
     deleteAccount: "Delete account",
     todaysDiary: "TODAY'S DIARY",
     writeHonestly: "Write honestly.",
@@ -72,7 +73,7 @@ const translations = {
     promptFuture: "What do you hope your future self remembers?",
     sealTo: "Seal to circles",
     sealDiary: "Seal diary",
-    attachPhoto: "Attach one photo (optional)",
+    attachPhoto: "Attach photos (optional)",
     replacePhoto: "Replace photo",
     homeWrite: "Write today's diary",
     homeWriteBody: "Your next entry will stay sealed until bloom day.",
@@ -110,7 +111,8 @@ const translations = {
     openingBloom: "Opening Bloom…",
     googleOnlyNote: "Your Google account is used only to sign in to Bloom.",
     welcomeTitle: "Write now. Read together later.",
-    welcomeBody: "Keep a sealed daily diary with your closest people. Choose a bloom date, write freely, and open the whole season together.",
+    welcomeBody:
+      "Keep a sealed daily diary with your closest people. Choose a bloom date, write freely, and open the whole season together.",
     timelineEyebrow: "THE BLOOM",
     timelineTitle: "Together, then.",
     timelineSubtitle: "Everything written in this circle is open now.",
@@ -151,7 +153,8 @@ const translations = {
     inviteFriend: "Invite a friend",
     invitationSent: "Invitation sent.",
     leaveCircleTitle: "Leave this circle?",
-    leaveCircleBody: "Your sealed diary entries stay private and will not be revealed to the remaining members.",
+    leaveCircleBody:
+      "Your sealed diary entries stay private and will not be revealed to the remaining members.",
     keepCircle: "Keep circle",
     leaveCircle: "Leave circle",
     circleNotFound: "Circle not found.",
@@ -162,7 +165,8 @@ const translations = {
     saveCircle: "Save circle",
     deleteCircle: "Delete circle",
     deleteCircleTitle: "Delete this circle?",
-    deleteCircleBody: "Empty circles are permanently deleted. Circles with diary publications are archived and their sealed publications are withdrawn.",
+    deleteCircleBody:
+      "Empty circles are permanently deleted. Circles with diary publications are archived and their sealed publications are withdrawn.",
     deleteCircleConfirmName: "Type the circle name to confirm",
     circleDeleted: "Circle deleted.",
     circleArchived: "Circle archived.",
@@ -180,15 +184,20 @@ const translations = {
     memberPlural: "members",
     restoreDraft: "Your unfinished diary was restored on this device.",
     writeBeforeSealing: "Write a few words before sealing today’s diary.",
-    diarySealed: "Sealed. You can read this diary entry again when your circles bloom.",
+    diarySealed:
+      "Sealed. You can read this diary entry again when your circles bloom.",
     todaySealedTitle: "Today's diary is sealed",
-    todaySealedBody: "You've already sealed today's diary. Come back tomorrow to write again.",
-    todayEditableBody: "You can update or delete this diary until your local midnight.",
-    todayLockedBody: "This diary can no longer be changed because the edit window is closed or a circle has bloomed.",
+    todaySealedBody:
+      "You've already sealed today's diary. Come back tomorrow to write again.",
+    todayEditableBody:
+      "You can update or delete this diary until your local midnight.",
+    todayLockedBody:
+      "This diary can no longer be changed because the edit window is closed or a circle has bloomed.",
     editToday: "Edit today's diary",
     deleteToday: "Delete today's diary",
     deleteTodayTitle: "Delete today's diary?",
-    deleteTodayBody: "This removes today's diary from its circles. You can write a replacement before midnight.",
+    deleteTodayBody:
+      "This removes today's diary from its circles. You can write a replacement before midnight.",
     todayDeleted: "Today's diary was deleted.",
     todayUpdated: "Today's diary was updated.",
     saveChanges: "Save changes",
@@ -286,7 +295,7 @@ const translations = {
     promptFuture: "你希望未来的自己记住什么？",
     sealTo: "封存到圈子",
     sealDiary: "封存日记",
-    attachPhoto: "添加一张照片（可选）",
+    attachPhoto: "添加照片（可选）",
     replacePhoto: "更换照片",
     homeWrite: "记录今天的日记",
     homeWriteBody: "下一篇日记会在开放日之前保持封存。",
@@ -324,7 +333,8 @@ const translations = {
     openingBloom: "正在打开 Bloom…",
     googleOnlyNote: "你的 Google 帐号仅用于登录 Bloom。",
     welcomeTitle: "现在写下，日后一起阅读。",
-    welcomeBody: "和最亲近的人一起封存每日的日记。选择开放日期，自由书写，然后一起打开整个季节。",
+    welcomeBody:
+      "和最亲近的人一起封存每日的日记。选择开放日期，自由书写，然后一起打开整个季节。",
     timelineEyebrow: "开放时刻",
     timelineTitle: "一起读，然后。",
     timelineSubtitle: "这个圈子里的所有日记现在都已开放。",
@@ -368,7 +378,8 @@ const translations = {
     saveCircle: "保存圈子",
     deleteCircle: "删除圈子",
     deleteCircleTitle: "删除这个圈子？",
-    deleteCircleBody: "空圈子会被永久删除。已有日记的圈子会被归档，封存的发布内容会被撤回。",
+    deleteCircleBody:
+      "空圈子会被永久删除。已有日记的圈子会被归档，封存的发布内容会被撤回。",
     deleteCircleConfirmName: "输入圈子名称以确认",
     circleDeleted: "圈子已删除。",
     circleArchived: "圈子已归档。",
@@ -467,7 +478,9 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 export function SettingsProvider({ children }: PropsWithChildren) {
   const [settings, setSettings] = useState<LocalSettings>(defaultSettings);
   const [isReady, setIsReady] = useState(false);
-  const [reminderStatus, setReminderStatus] = useState<ReminderSyncResult | "idle">("idle");
+  const [reminderStatus, setReminderStatus] = useState<
+    ReminderSyncResult | "idle"
+  >("idle");
 
   useEffect(() => {
     void readLocalSettings().then((stored) => {

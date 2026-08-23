@@ -6,17 +6,17 @@ using Microsoft.Extensions.Options;
 
 namespace Bloom.Infrastructure.Media;
 
-/// <summary>Stores protected image bytes in the API's project-local App_Data folder.</summary>
+/// <summary>Stores protected image bytes beneath the configured image-storage root.</summary>
 public sealed class LocalImageStorage(
     IOptions<ImageStorageOptions> options,
     IDataProtectionProvider dataProtectionProvider,
     TimeProvider timeProvider) : IImageStorage
 {
     private static readonly HashSet<string> AllowedContentTypes = ["image/jpeg", "image/png", "image/webp"];
-    private readonly ImageStorageOptions _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+    private readonly ImageStorageOptions _options = GetOptions(options);
     private readonly IDataProtector _protector = (dataProtectionProvider ?? throw new ArgumentNullException(nameof(dataProtectionProvider))).CreateProtector("Bloom.Images.v1");
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    private readonly string _rootPath = ResolveRootPath(options.Value.RootPath);
+    private readonly string _rootPath = ResolveRootPath(GetOptions(options).RootPath);
 
     /// <inheritdoc />
     public async Task<StoredImage> SaveAsync(Guid ownerUserId, Stream content, string contentType, CancellationToken cancellationToken)
@@ -62,16 +62,26 @@ public sealed class LocalImageStorage(
     private string GetSafePath(string relativePath)
     {
         var fullPath = Path.GetFullPath(Path.Combine(_rootPath, relativePath.Replace('/', Path.DirectorySeparatorChar)));
-        if (!fullPath.StartsWith(_rootPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("The media path is invalid.");
+        var relative = Path.GetRelativePath(_rootPath, fullPath);
+        if (Path.IsPathRooted(relative)
+            || relative == ".."
+            || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The media path is invalid.");
+        }
         return fullPath;
     }
 
     private static string ResolveRootPath(string rootPath)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(rootPath);
         var resolved = Path.GetFullPath(rootPath);
         Directory.CreateDirectory(resolved);
-        return resolved.TrimEnd(Path.DirectorySeparatorChar);
+        return Path.TrimEndingDirectorySeparator(resolved);
     }
+
+    private static ImageStorageOptions GetOptions(IOptions<ImageStorageOptions>? options)
+        => options?.Value ?? throw new ArgumentNullException(nameof(options));
 
     private static void ValidateSignature(byte[] bytes, string contentType)
     {
