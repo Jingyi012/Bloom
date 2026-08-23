@@ -342,8 +342,9 @@ export default function BloomTimelineScreen() {
               </Pressable>
             </View>
 
-            <Text style={styles.filterSectionTitle}>{t("filterByDate")}</Text>
-            <View style={styles.filterDateRow}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.filterSectionTitle}>{t("filterByDate")}</Text>
+              <View style={styles.filterDateRow}>
               <Pressable
                 onPress={() => setShowDatePicker(true)}
                 style={styles.filterDateButton}
@@ -358,60 +359,61 @@ export default function BloomTimelineScreen() {
                   <MaterialCommunityIcons color={colors.inkSoft} name="close-circle-outline" size={20} />
                 </Pressable>
               ) : null}
-            </View>
-            {showDatePicker ? (
-              <View style={styles.pickerPanel}>
-                <DateTimePicker
-                  display="spinner"
-                  mode="date"
-                  onDismiss={() => setShowDatePicker(false)}
-                  onValueChange={(_, value) => {
-                    if (!value) return;
-                    setDraftDate(value);
-                    setShowDatePicker(false);
-                  }}
-                  value={draftDate ?? new Date()}
-                />
               </View>
-            ) : null}
+              {showDatePicker ? (
+                <View style={styles.pickerPanel}>
+                  <DateTimePicker
+                    display="spinner"
+                    mode="date"
+                    onDismiss={() => setShowDatePicker(false)}
+                    onValueChange={(_, value) => {
+                      if (!value) return;
+                      setDraftDate(value);
+                      setShowDatePicker(false);
+                    }}
+                    value={draftDate ?? new Date()}
+                  />
+                </View>
+              ) : null}
 
-            <Text style={styles.filterSectionTitle}>{t("filterByPerson")}</Text>
-            <Pressable
-              onPress={() => setDraftAuthorId(null)}
-              style={[styles.filterMember, draftAuthorId === null ? styles.filterMemberSelected : null]}
-            >
-              <View style={styles.filterMemberAvatar}>
-                <MaterialCommunityIcons color={colors.sageDark} name="account-group-outline" size={18} />
-              </View>
-              <Text style={styles.filterMemberName}>{t("everyone")}</Text>
-              {draftAuthorId === null ? <MaterialCommunityIcons color={colors.sageDark} name="check" size={19} /> : null}
-            </Pressable>
-            {members.map((member) => {
-              const isSelected = draftAuthorId === member.userId;
-              const initial = member.displayName.trim().charAt(0).toUpperCase() || "?";
-              return (
-                <Pressable
-                  key={member.userId}
-                  onPress={() => setDraftAuthorId(member.userId)}
-                  style={[styles.filterMember, isSelected ? styles.filterMemberSelected : null]}
-                >
-                  <View style={styles.filterMemberAvatar}>
-                    <Text style={styles.filterMemberAvatarText}>{initial}</Text>
-                  </View>
-                  <Text numberOfLines={1} style={styles.filterMemberName}>{member.displayName}</Text>
-                  {isSelected ? <MaterialCommunityIcons color={colors.sageDark} name="check" size={19} /> : null}
+              <Text style={styles.filterSectionTitle}>{t("filterByPerson")}</Text>
+              <Pressable
+                onPress={() => setDraftAuthorId(null)}
+                style={[styles.filterMember, draftAuthorId === null ? styles.filterMemberSelected : null]}
+              >
+                <View style={styles.filterMemberAvatar}>
+                  <MaterialCommunityIcons color={colors.sageDark} name="account-group-outline" size={18} />
+                </View>
+                <Text style={styles.filterMemberName}>{t("everyone")}</Text>
+                {draftAuthorId === null ? <MaterialCommunityIcons color={colors.sageDark} name="check" size={19} /> : null}
+              </Pressable>
+              {members.map((member) => {
+                const isSelected = draftAuthorId === member.userId;
+                const initial = member.displayName.trim().charAt(0).toUpperCase() || "?";
+                return (
+                  <Pressable
+                    key={member.userId}
+                    onPress={() => setDraftAuthorId(member.userId)}
+                    style={[styles.filterMember, isSelected ? styles.filterMemberSelected : null]}
+                  >
+                    <View style={styles.filterMemberAvatar}>
+                      <Text style={styles.filterMemberAvatarText}>{initial}</Text>
+                    </View>
+                    <Text numberOfLines={1} style={styles.filterMemberName}>{member.displayName}</Text>
+                    {isSelected ? <MaterialCommunityIcons color={colors.sageDark} name="check" size={19} /> : null}
+                  </Pressable>
+                );
+              })}
+
+              <View style={styles.filterActions}>
+                <Pressable onPress={resetFilters} style={styles.filterResetButton}>
+                  <Text style={styles.filterResetButtonText}>{t("resetFilters")}</Text>
                 </Pressable>
-              );
-            })}
-
-            <View style={styles.filterActions}>
-              <Pressable onPress={resetFilters} style={styles.filterResetButton}>
-                <Text style={styles.filterResetButtonText}>{t("resetFilters")}</Text>
-              </Pressable>
-              <Pressable onPress={applyFilters} style={styles.filterApplyButton}>
-                <Text style={styles.filterApplyButtonText}>{t("applyFilters")}</Text>
-              </Pressable>
-            </View>
+                <Pressable onPress={applyFilters} style={styles.filterApplyButton}>
+                  <Text style={styles.filterApplyButtonText}>{t("applyFilters")}</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
