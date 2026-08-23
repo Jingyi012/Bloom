@@ -63,11 +63,49 @@ jobs:
       - name: Install EAS CLI
         run: npm install --global eas-cli
 
+      - name: Sync mobile variables to EAS
+        shell: bash
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_TARGET_ENV: ${{ inputs.target_env }}
+        run: |
+          if [[ "$EAS_TARGET_ENV" == "prod" ]]; then
+            EAS_ENVIRONMENT="production"
+          else
+            EAS_ENVIRONMENT="preview"
+          fi
+
+          set_eas_variable() {
+            local name="$1"
+            local value="$2"
+            if [[ -n "$value" ]]; then
+              eas env:set \
+                --name "$name" \
+                --value "$value" \
+                --environment "$EAS_ENVIRONMENT" \
+                --visibility plaintext \
+                --non-interactive
+            fi
+          }
+
+          set_eas_variable EXPO_PUBLIC_API_URL "$EXPO_PUBLIC_API_URL"
+          set_eas_variable EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID "$EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID"
+          set_eas_variable EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID "$EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID"
+          set_eas_variable EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID "$EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID"
+          echo "EAS environment configured: $EAS_ENVIRONMENT"
+
       - name: Build APK with EAS
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           BLOOM_APP_VERSION: ${{ inputs.version }}
-        run: eas build --platform android --profile preview --non-interactive --wait --json > eas-build.json
+          EAS_TARGET_ENV: ${{ inputs.target_env }}
+        run: |
+          if [[ "$EAS_TARGET_ENV" == "prod" ]]; then
+            EAS_ENVIRONMENT="production"
+          else
+            EAS_ENVIRONMENT="preview"
+          fi
+          eas build --platform android --profile preview --environment "$EAS_ENVIRONMENT" --non-interactive --wait --json > eas-build.json
 
       - name: Download APK
         shell: bash
