@@ -240,7 +240,7 @@ public sealed class EfEntryService(
     }
 
     /// <inheritdoc />
-    public async Task<TimelinePage> GetTimelineAsync(Guid userId, Guid circleId, string? cursor, DateOnly? date, CancellationToken cancellationToken)
+    public async Task<TimelinePage> GetTimelineAsync(Guid userId, Guid circleId, string? cursor, DateOnly? date, Guid? authorUserId, CancellationToken cancellationToken)
     {
         var circle = await _db.Circles.AsNoTracking().Include(candidate => candidate.Members)
             .SingleOrDefaultAsync(candidate => candidate.Id == circleId, cancellationToken).ConfigureAwait(false);
@@ -257,6 +257,7 @@ public sealed class EfEntryService(
                     select new { publication, diaryEntry, author };
 
         if (date is not null) query = query.Where(item => item.publication.AuthorLocalDate == date.Value);
+        if (authorUserId is not null) query = query.Where(item => item.publication.AuthorUserId == authorUserId.Value);
         var state = DecodeCursor<TimelineCursor>(cursor);
         if (state is not null)
         {

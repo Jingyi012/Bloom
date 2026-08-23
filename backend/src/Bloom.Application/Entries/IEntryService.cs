@@ -41,7 +41,7 @@ public interface IEntryService
         CancellationToken cancellationToken);
 
     /// <summary>Gets a page of entries visible in a bloomed circle.</summary>
-    Task<TimelinePage> GetTimelineAsync(Guid userId, Guid circleId, string? cursor, DateOnly? date, CancellationToken cancellationToken);
+    Task<TimelinePage> GetTimelineAsync(Guid userId, Guid circleId, string? cursor, DateOnly? date, Guid? authorUserId, CancellationToken cancellationToken);
 
     /// <summary>Gets one publication visible in a bloomed circle.</summary>
     Task<TimelineEntry> GetPublicationAsync(Guid userId, Guid publicationId, CancellationToken cancellationToken);

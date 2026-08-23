@@ -16,6 +16,21 @@ function toDate(value: string | Date): Date {
   return value instanceof Date ? value : parseDateOnly(value);
 }
 
+/** Returns a calendar date in the device's local timezone for date filter queries. */
+export function toLocalDateValue(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** Parses a local calendar date without applying a UTC offset. */
+export function parseLocalDateValue(value: string): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return new Date();
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12);
+}
+
 /** Formats a date-only value or instant in the device's local timezone. */
 export function formatLocalDate(value: string | Date): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: localTimeZone() }).format(toDate(value));

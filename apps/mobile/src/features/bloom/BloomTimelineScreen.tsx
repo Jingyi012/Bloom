@@ -1,9 +1,11 @@
 import { FlashList } from "@shopify/flash-list";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   ActivityIndicator,
   AppState,
+  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -14,13 +16,18 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "@/components/Screen";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
-import type { TimelineEntry } from "@/types/api";
+import type { CircleMember, TimelineEntry } from "@/types/api";
 import { colors } from "@/styles/tokens";
 import { bloomStyles as styles } from "@/styles/screens/bloom.styles";
 import { InlineAlert } from "@/components/InlineAlert";
 import { useSettings } from "@/settings/SettingsProvider";
 import { REACTION_OPTIONS, type ReactionCode } from "@/features/bloom/reactions";
-import { formatLocalDate, formatLocalTime } from "@/utils/date";
+import {
+  formatLocalDate,
+  formatLocalTime,
+  parseLocalDateValue,
+  toLocalDateValue,
+} from "@/utils/date";
 
 export default function BloomTimelineScreen() {
   const { circleId, circleName, circleEmoji } = useLocalSearchParams<{
@@ -37,6 +44,13 @@ export default function BloomTimelineScreen() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [members, setMembers] = useState<CircleMember[]>([]);
+  const [filterSheetVisible, setFilterSheetVisible] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
+  const [draftDate, setDraftDate] = useState<Date | null>(null);
+  const [draftAuthorId, setDraftAuthorId] = useState<string | null>(null);
   const loadingMoreRef = useRef(false);
 
   const load = useCallback(
@@ -45,7 +59,13 @@ export default function BloomTimelineScreen() {
       refresh ? setIsRefreshing(true) : setIsLoading(true);
       setError(null);
       try {
-        const page = await bloomApi.getTimeline(session.accessToken, circleId);
+        const page = await bloomApi.getTimeline(
+          session.accessToken,
+          circleId,
+          undefined,
+          selectedDate ?? undefined,
+          selectedAuthorId ?? undefined,
+        );
         setEntries(page.items);
         setNextCursor(page.nextCursor);
       } catch (loadError) {
@@ -59,7 +79,7 @@ export default function BloomTimelineScreen() {
         setIsRefreshing(false);
       }
     },
-    [circleId, session?.accessToken, t],
+    [circleId, selectedAuthorId, selectedDate, session?.accessToken, t],
   );
 
   const loadMore = useCallback(async () => {
@@ -67,7 +87,13 @@ export default function BloomTimelineScreen() {
     loadingMoreRef.current = true;
     setIsLoadingMore(true);
     try {
-      const page = await bloomApi.getTimeline(session.accessToken, circleId, nextCursor);
+      const page = await bloomApi.getTimeline(
+        session.accessToken,
+        circleId,
+        nextCursor,
+        selectedDate ?? undefined,
+        selectedAuthorId ?? undefined,
+      );
       setEntries((current) => {
         const existingIds = new Set(current.map((entry) => entry.publicationId));
         return [...current, ...page.items.filter((entry) => !existingIds.has(entry.publicationId))];
@@ -79,7 +105,7 @@ export default function BloomTimelineScreen() {
       loadingMoreRef.current = false;
       setIsLoadingMore(false);
     }
-  }, [circleId, isLoading, isRefreshing, nextCursor, session?.accessToken, t]);
+  }, [circleId, isLoading, isRefreshing, nextCursor, selectedAuthorId, selectedDate, session?.accessToken, t]);
 
   useEffect(() => {
     void load();
@@ -90,6 +116,63 @@ export default function BloomTimelineScreen() {
     });
     return () => subscription.remove();
   }, [load]);
+
+  useEffect(() => {
+    const loadMembers = async () => {
+      if (!session?.accessToken || !circleId) return;
+      try {
+        const detail = await bloomApi.getCircle(session.accessToken, circleId);
+        setMembers(detail.members.filter((member) => member.isActive));
+      } catch {
+        // Timeline data remains useful when the member list cannot be loaded.
+      }
+    };
+    void loadMembers();
+  }, [circleId, session?.accessToken]);
+
+  const openFilterSheet = useCallback(() => {
+    setDraftDate(selectedDate ? parseLocalDateValue(selectedDate) : null);
+    setDraftAuthorId(selectedAuthorId);
+    setShowDatePicker(false);
+    setFilterSheetVisible(true);
+  }, [selectedAuthorId, selectedDate]);
+
+  const applyFilters = useCallback(() => {
+    const nextDate = draftDate ? toLocalDateValue(draftDate) : null;
+    const filtersChanged = nextDate !== selectedDate || draftAuthorId !== selectedAuthorId;
+    setSelectedDate(nextDate);
+    setSelectedAuthorId(draftAuthorId);
+    setFilterSheetVisible(false);
+    setShowDatePicker(false);
+    if (filtersChanged) {
+      setEntries([]);
+      setNextCursor(null);
+      loadingMoreRef.current = false;
+    } else {
+      void load(true);
+    }
+  }, [draftAuthorId, draftDate, load, selectedAuthorId, selectedDate]);
+
+  const resetFilters = useCallback(() => {
+    const filtersWereActive = selectedDate !== null || selectedAuthorId !== null;
+    setDraftDate(null);
+    setDraftAuthorId(null);
+    setSelectedDate(null);
+    setSelectedAuthorId(null);
+    setFilterSheetVisible(false);
+    setShowDatePicker(false);
+    if (filtersWereActive) {
+      setEntries([]);
+      setNextCursor(null);
+      loadingMoreRef.current = false;
+    } else {
+      void load(true);
+    }
+  }, [load, selectedAuthorId, selectedDate]);
+
+  const selectedMemberName = selectedAuthorId
+    ? members.find((member) => member.userId === selectedAuthorId)?.displayName
+    : null;
 
   const updateReaction = useCallback(
     async (entry: TimelineEntry, code: ReactionCode) => {
@@ -151,7 +234,37 @@ export default function BloomTimelineScreen() {
         <Text style={styles.bloomBadge}>{t("bloomedStatus")}</Text>
       </View>
       <View style={styles.header}>
-        <Text style={styles.subtitle}>{t("timelineSubtitle")}</Text>
+        <View style={styles.headerRow}>
+          <Text style={[styles.subtitle, styles.headerCopy]}>{t("timelineSubtitle")}</Text>
+          <Pressable
+            accessibilityLabel={t("filter")}
+            accessibilityRole="button"
+            onPress={openFilterSheet}
+            style={styles.filterButton}
+          >
+            <MaterialCommunityIcons color={colors.ink} name="filter-variant" size={16} />
+            <Text style={styles.filterButtonText}>{t("filter")}</Text>
+          </Pressable>
+        </View>
+        {selectedDate || selectedAuthorId ? (
+          <View style={styles.filterChips}>
+            {selectedDate ? (
+              <View style={styles.filterChip}>
+                <MaterialCommunityIcons color={colors.sageDark} name="calendar-outline" size={14} />
+                <Text style={styles.filterChipText}>{formatDate(selectedDate)}</Text>
+              </View>
+            ) : null}
+            {selectedAuthorId ? (
+              <View style={styles.filterChip}>
+                <MaterialCommunityIcons color={colors.sageDark} name="account-outline" size={14} />
+                <Text style={styles.filterChipText}>{selectedMemberName ?? t("person")}</Text>
+              </View>
+            ) : null}
+            <Pressable accessibilityRole="button" onPress={resetFilters} style={styles.filterReset}>
+              <Text style={styles.filterResetText}>{t("resetFilters")}</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
       {error ? (
         <InlineAlert message={error} onDismiss={() => setError(null)} />
@@ -204,6 +317,104 @@ export default function BloomTimelineScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
+      <Modal
+        animationType="slide"
+        onRequestClose={() => setFilterSheetVisible(false)}
+        transparent
+        visible={filterSheetVisible}
+      >
+        <Pressable
+          onPress={() => setFilterSheetVisible(false)}
+          style={styles.sheetBackdrop}
+        >
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>{t("filter")}</Text>
+              <Pressable
+                accessibilityLabel={t("cancel")}
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={() => setFilterSheetVisible(false)}
+                style={styles.sheetClose}
+              >
+                <MaterialCommunityIcons color={colors.inkSoft} name="close" size={20} />
+              </Pressable>
+            </View>
+
+            <Text style={styles.filterSectionTitle}>{t("filterByDate")}</Text>
+            <View style={styles.filterDateRow}>
+              <Pressable
+                onPress={() => setShowDatePicker(true)}
+                style={styles.filterDateButton}
+              >
+                <MaterialCommunityIcons color={colors.sageDark} name="calendar-outline" size={18} />
+                <Text style={styles.filterDateText}>
+                  {draftDate ? formatDate(toLocalDateValue(draftDate)) : t("anyDate")}
+                </Text>
+              </Pressable>
+              {draftDate ? (
+                <Pressable accessibilityRole="button" onPress={() => setDraftDate(null)} style={styles.filterClearButton}>
+                  <MaterialCommunityIcons color={colors.inkSoft} name="close-circle-outline" size={20} />
+                </Pressable>
+              ) : null}
+            </View>
+            {showDatePicker ? (
+              <View style={styles.pickerPanel}>
+                <DateTimePicker
+                  display="spinner"
+                  mode="date"
+                  onDismiss={() => setShowDatePicker(false)}
+                  onValueChange={(_, value) => {
+                    if (!value) return;
+                    setDraftDate(value);
+                    setShowDatePicker(false);
+                  }}
+                  value={draftDate ?? new Date()}
+                />
+              </View>
+            ) : null}
+
+            <Text style={styles.filterSectionTitle}>{t("filterByPerson")}</Text>
+            <Pressable
+              onPress={() => setDraftAuthorId(null)}
+              style={[styles.filterMember, draftAuthorId === null ? styles.filterMemberSelected : null]}
+            >
+              <View style={styles.filterMemberAvatar}>
+                <MaterialCommunityIcons color={colors.sageDark} name="account-group-outline" size={18} />
+              </View>
+              <Text style={styles.filterMemberName}>{t("everyone")}</Text>
+              {draftAuthorId === null ? <MaterialCommunityIcons color={colors.sageDark} name="check" size={19} /> : null}
+            </Pressable>
+            {members.map((member) => {
+              const isSelected = draftAuthorId === member.userId;
+              const initial = member.displayName.trim().charAt(0).toUpperCase() || "?";
+              return (
+                <Pressable
+                  key={member.userId}
+                  onPress={() => setDraftAuthorId(member.userId)}
+                  style={[styles.filterMember, isSelected ? styles.filterMemberSelected : null]}
+                >
+                  <View style={styles.filterMemberAvatar}>
+                    <Text style={styles.filterMemberAvatarText}>{initial}</Text>
+                  </View>
+                  <Text numberOfLines={1} style={styles.filterMemberName}>{member.displayName}</Text>
+                  {isSelected ? <MaterialCommunityIcons color={colors.sageDark} name="check" size={19} /> : null}
+                </Pressable>
+              );
+            })}
+
+            <View style={styles.filterActions}>
+              <Pressable onPress={resetFilters} style={styles.filterResetButton}>
+                <Text style={styles.filterResetButtonText}>{t("resetFilters")}</Text>
+              </Pressable>
+              <Pressable onPress={applyFilters} style={styles.filterApplyButton}>
+                <Text style={styles.filterApplyButtonText}>{t("applyFilters")}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }

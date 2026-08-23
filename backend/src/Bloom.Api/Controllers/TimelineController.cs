@@ -19,12 +19,12 @@ public sealed class TimelineController(IEntryService entryService) : ControllerB
     [ProducesResponseType(typeof(TimelineResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status423Locked)]
-    public async Task<ActionResult<TimelineResponse>> GetAsync(Guid circleId, [FromQuery] string? cursor, [FromQuery] DateOnly? date, CancellationToken cancellationToken)
+    public async Task<ActionResult<TimelineResponse>> GetAsync(Guid circleId, [FromQuery] string? cursor, [FromQuery] DateOnly? date, [FromQuery] Guid? authorUserId, CancellationToken cancellationToken)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
         try
         {
-            var page = await _entryService.GetTimelineAsync(userId, circleId, cursor, date, cancellationToken).ConfigureAwait(false);
+            var page = await _entryService.GetTimelineAsync(userId, circleId, cursor, date, authorUserId, cancellationToken).ConfigureAwait(false);
             return Ok(new TimelineResponse(page.Items.Select(ToResponse).ToArray(), page.NextCursor));
         }
         catch (CircleNotBloomedException)
