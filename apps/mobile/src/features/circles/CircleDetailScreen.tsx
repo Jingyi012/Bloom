@@ -22,6 +22,11 @@ import { InlineAlert } from "@/components/InlineAlert";
 import { useSettings } from "@/settings/SettingsProvider";
 import { formatLocalDate, formatLocalDateTime, formatLocalTime } from "@/utils/date";
 
+const CIRCLE_EMOJIS = [
+  "\u{1F331}", "\u{1F338}", "\u{1F33F}", "\u{1F33B}",
+  "\u{1F342}", "\u{2728}", "\u{1F319}", "\u{1F98B}",
+] as const;
+
 export default function CircleDetailScreen() {
   const { circleId } = useLocalSearchParams<{ circleId: string }>();
   const router = useRouter();
@@ -69,7 +74,7 @@ export default function CircleDetailScreen() {
   const openEditSheet = useCallback(() => {
     if (!detail || detail.circle.status === "Bloomed") return;
     setEditName(detail.circle.name);
-    setEditEmoji(detail.circle.emoji);
+    setEditEmoji(CIRCLE_EMOJIS.includes(detail.circle.emoji as (typeof CIRCLE_EMOJIS)[number]) ? detail.circle.emoji : CIRCLE_EMOJIS[0]);
     setEditBloomAt(new Date(detail.circle.bloomAtUtc));
     setEditPickerMode(null);
     setShowEditSheet(true);
@@ -338,7 +343,20 @@ export default function CircleDetailScreen() {
             <Text style={styles.label}>{t("circleName")}</Text>
             <TextInput autoCapitalize="sentences" onChangeText={setEditName} placeholder={t("circleNamePlaceholder")} placeholderTextColor={colors.inkSoft} style={styles.input} value={editName} />
             <Text style={styles.label}>{t("circleEmoji")}</Text>
-            <TextInput autoCapitalize="none" maxLength={8} onChangeText={setEditEmoji} placeholder="🌱" placeholderTextColor={colors.inkSoft} style={styles.input} value={editEmoji} />
+            <View style={styles.emojiGrid}>
+              {CIRCLE_EMOJIS.map((emoji) => (
+                <Pressable
+                  accessibilityLabel={`${t("circleEmoji")} ${emoji}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: editEmoji === emoji }}
+                  key={emoji}
+                  onPress={() => setEditEmoji(emoji)}
+                  style={[styles.emojiOption, editEmoji === emoji ? styles.emojiOptionSelected : null]}
+                >
+                  <Text style={styles.emojiOptionText}>{emoji}</Text>
+                </Pressable>
+              ))}
+            </View>
             <Text style={styles.label}>{t("bloomAfter")}</Text>
             <View style={styles.bloomPickerRow}>
               <Pressable accessibilityRole="button" onPress={() => setEditPickerMode("date")} style={styles.bloomPickerButton}>
