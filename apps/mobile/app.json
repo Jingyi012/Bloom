@@ -31,14 +31,21 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.bestfriends.bloom"
+      "bundleIdentifier": "com.bestfriends.bloom",
+      "statusBarStyle": "dark"
     },
     "android": {
       "package": "com.bestfriends.bloom",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/bloom-icon.png",
         "backgroundColor": "#FCF8F4"
       }
+    },
+    "androidStatusBar": {
+      "backgroundColor": "#FCF8F4",
+      "barStyle": "dark-content",
+      "translucent": false
     },
     "extra": {
       "router": {},

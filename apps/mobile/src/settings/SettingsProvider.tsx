@@ -194,7 +194,7 @@ const translations = {
     todayEditableBody:
       "You can update or delete this diary until your local midnight.",
     todayLockedBody:
-      "This diary can no longer be changed because the edit window is closed or a circle has bloomed.",
+      "This diary can no longer be changed because today’s edit window is closed.",
     editToday: "Edit today's diary",
     deleteToday: "Delete today's diary",
     deleteTodayTitle: "Delete today's diary?",
@@ -408,7 +408,7 @@ const translations = {
     todaySealedTitle: "今天的日记已封存",
     todaySealedBody: "你今天已经完成日记封存。明天再回来继续记录吧。",
     todayEditableBody: "在本地零点前，你可以更新或删除这篇日记。",
-    todayLockedBody: "编辑时间已结束或圈子已开放，这篇日记无法再更改。",
+    todayLockedBody: "今天的编辑时间已结束，这篇日记无法再更改。",
     editToday: "编辑今天的日记",
     deleteToday: "删除今天的日记",
     deleteTodayTitle: "删除今天的日记？",

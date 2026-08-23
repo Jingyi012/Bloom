@@ -3,7 +3,6 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Pressable,
   Platform,
   Text,
@@ -13,6 +12,7 @@ import {
 import DateTimePicker, { type DateTimePickerChangeEvent } from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "@/components/Screen";
+import { BottomSheet } from "@/components/BottomSheet";
 import { Avatar } from "@/components/Avatar";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
@@ -22,11 +22,7 @@ import { circleDetailStyles as styles } from "@/styles/screens/circle-detail.sty
 import { InlineAlert } from "@/components/InlineAlert";
 import { useSettings } from "@/settings/SettingsProvider";
 import { formatLocalDate, formatLocalDateTime, formatLocalTime } from "@/utils/date";
-
-const CIRCLE_EMOJIS = [
-  "\u{1F331}", "\u{1F338}", "\u{1F33F}", "\u{1F33B}",
-  "\u{1F342}", "\u{2728}", "\u{1F319}", "\u{1F98B}",
-] as const;
+import { CIRCLE_EMOJIS } from "@/features/circles/circleEmojis";
 
 export default function CircleDetailScreen() {
   const { circleId } = useLocalSearchParams<{ circleId: string }>();
@@ -363,9 +359,12 @@ export default function CircleDetailScreen() {
           <Text style={styles.dangerText}>{t("deleteCircle")}</Text>
         </Pressable>
       ) : null}
-      <Modal animationType="slide" onRequestClose={() => setShowEditSheet(false)} transparent visible={showEditSheet}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => setShowEditSheet(false)} style={styles.sheetBackdrop}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={styles.sheet}>
+      <BottomSheet
+        backdropStyle={styles.sheetBackdrop}
+        onClose={() => setShowEditSheet(false)}
+        sheetStyle={styles.sheet}
+        visible={showEditSheet}
+      >
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{t("editCircle")}</Text>
@@ -410,12 +409,13 @@ export default function CircleDetailScreen() {
             <Pressable accessibilityRole="button" disabled={isSaving || !editName.trim()} onPress={() => void saveCircle()} style={[styles.saveButton, isSaving ? styles.saveButtonDisabled : null]}>
               {isSaving ? <ActivityIndicator color={colors.card} /> : <Text style={styles.saveButtonText}>{t("saveCircle")}</Text>}
             </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-      <Modal animationType="slide" onRequestClose={() => setShowDeleteSheet(false)} transparent visible={showDeleteSheet}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t("cancel")} onPress={() => setShowDeleteSheet(false)} style={styles.sheetBackdrop}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={styles.sheet}>
+      </BottomSheet>
+      <BottomSheet
+        backdropStyle={styles.sheetBackdrop}
+        onClose={() => setShowDeleteSheet(false)}
+        sheetStyle={styles.sheet}
+        visible={showDeleteSheet}
+      >
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{t("deleteCircleTitle")}</Text>
@@ -429,9 +429,7 @@ export default function CircleDetailScreen() {
             <Pressable accessibilityRole="button" disabled={isDeleting || deleteConfirmation.trim() !== circle.name.trim()} onPress={() => void confirmDelete()} style={[styles.deleteButton, isDeleting || deleteConfirmation.trim() !== circle.name.trim() ? styles.saveButtonDisabled : null]}>
               {isDeleting ? <ActivityIndicator color={colors.card} /> : <Text style={styles.deleteButtonText}>{t("deleteCircle")}</Text>}
             </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      </BottomSheet>
     </Screen>
   );
 }

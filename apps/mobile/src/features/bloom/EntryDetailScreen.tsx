@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '@/components/Screen';
 import { Avatar } from '@/components/Avatar';
 import { InlineAlert } from '@/components/InlineAlert';
@@ -21,6 +22,7 @@ export default function EntryDetailScreen() {
   const router = useRouter();
   const { session } = useAuth();
   const { language, t } = useSettings();
+  const insets = useSafeAreaInsets();
   const [entry, setEntry] = useState<TimelineEntry | null>(null);
   const [comments, setComments] = useState<ApiComment[]>([]);
   const [draft, setDraft] = useState('');
@@ -242,7 +244,7 @@ export default function EntryDetailScreen() {
         </ScrollView>
 
         {entry ? (
-          <View style={styles.composerDock}>
+          <View style={[styles.composerDock, { paddingBottom: Math.max(insets.bottom, 8) }]}>
             <View style={styles.composer}>
               <TextInput
                 accessibilityLabel={t('comment')}

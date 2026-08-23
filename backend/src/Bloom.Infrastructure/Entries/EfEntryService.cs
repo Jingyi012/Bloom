@@ -445,7 +445,12 @@ public sealed class EfEntryService(
                                   select new EditablePublication(publication, circle))
             .ToArrayAsync(cancellationToken)
             .ConfigureAwait(false);
-        var canModify = publications.Length > 0 && publications.All(item => item.Publication.Status == EntryPublicationStatus.Sealed && item.Circle.GetCurrentStatus(now) == CircleStatus.Sealed);
+        // A diary belongs to the author's local calendar day. Its edit window
+        // is independent of later circle membership or bloom state: joining a
+        // new circle must not make an already-written diary unexpectedly
+        // disappear from the editor. Once the author's next local midnight
+        // passes, the entry becomes immutable.
+        var canModify = now < modificationEndsAtUtc;
         return new TodayEntryContext(entry, localDate, modificationEndsAtUtc, canModify, publications);
     }
 

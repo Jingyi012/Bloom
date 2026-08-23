@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, StatusBar, View } from 'react-native';
 import { useFonts } from 'expo-font';
 import {
   PlusJakartaSans_400Regular,
@@ -29,6 +29,7 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      <StatusBar backgroundColor={colors.background} barStyle="dark-content" />
       <SettingsProvider>
         <AuthProvider>
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>

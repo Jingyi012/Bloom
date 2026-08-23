@@ -44,6 +44,15 @@ const PROMPTS = [
   { key: "future", translationKey: "promptFuture" },
 ] as const;
 
+type EditorSnapshot = {
+  text: string;
+  mood?: string;
+  promptKey?: string;
+  selectedCircleIds: string[];
+  imageUris: string[];
+  draftClientEntryId: string | null;
+};
+
 function createClientEntryId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -92,6 +101,7 @@ export default function WriteScreen() {
   const [mood, setMood] = useState<string | undefined>();
   const [promptKey, setPromptKey] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isTodayStatusLoading, setIsTodayStatusLoading] = useState(true);
   const [todayStatus, setTodayStatus] = useState<TodayEntryStatus | null>(null);
   const [isEditingToday, setIsEditingToday] = useState(false);
@@ -100,6 +110,7 @@ export default function WriteScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [imageUris, setImageUris] = useState<string[]>([]);
   const photoIdentityByUri = useRef(new Map<string, string>());
+  const editingSnapshot = useRef<EditorSnapshot | null>(null);
   const [draftClientEntryId, setDraftClientEntryId] = useState<string | null>(
     null,
   );
@@ -139,6 +150,16 @@ export default function WriteScreen() {
       setIsTodayStatusLoading(false);
     }
   }, [session?.accessToken, t]);
+
+  const refresh = useCallback(async () => {
+    if (!session?.accessToken || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await Promise.all([loadCircles(), loadTodayStatus()]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, loadCircles, loadTodayStatus, session?.accessToken]);
 
   useFocusEffect(
     useCallback(() => {
@@ -267,6 +288,14 @@ export default function WriteScreen() {
 
   const beginEditingToday = useCallback(() => {
     if (!todayStatus?.hasEntry || !todayStatus.canModify) return;
+    editingSnapshot.current = {
+      text,
+      mood,
+      promptKey,
+      selectedCircleIds: selectedCircleIds.slice(),
+      imageUris: imageUris.slice(),
+      draftClientEntryId,
+    };
     setText(todayStatus.text ?? "");
     setMood(todayStatus.mood ?? undefined);
     setPromptKey(todayStatus.promptKey ?? undefined);
@@ -274,7 +303,26 @@ export default function WriteScreen() {
     setIsEditingToday(true);
     setError(null);
     setNotice(null);
-  }, [todayStatus]);
+  }, [draftClientEntryId, imageUris, mood, promptKey, selectedCircleIds, text, todayStatus]);
+
+  const cancelEditingToday = useCallback(() => {
+    const snapshot = editingSnapshot.current;
+    if (snapshot) {
+      setText(snapshot.text);
+      setMood(snapshot.mood);
+      setPromptKey(snapshot.promptKey);
+      setSelectedCircleIds(snapshot.selectedCircleIds);
+      setImageUris(snapshot.imageUris);
+      setDraftClientEntryId(snapshot.draftClientEntryId);
+      photoIdentityByUri.current = new Map(
+        snapshot.imageUris.map((uri) => [uri, `uri:${uri}`]),
+      );
+    }
+    editingSnapshot.current = null;
+    setIsEditingToday(false);
+    setError(null);
+    setNotice(null);
+  }, []);
 
   const deleteToday = useCallback(() => {
     if (
@@ -293,6 +341,7 @@ export default function WriteScreen() {
             try {
               setIsSubmitting(true);
               await bloomApi.deleteTodayEntry(session.accessToken);
+              editingSnapshot.current = null;
               setIsEditingToday(false);
               await clearEditor();
               await loadTodayStatus();
@@ -334,6 +383,7 @@ export default function WriteScreen() {
           mood,
           promptKey,
         });
+        editingSnapshot.current = null;
         setIsEditingToday(false);
         await clearEditor();
         await loadTodayStatus();
@@ -442,7 +492,7 @@ export default function WriteScreen() {
   }, []);
 
   return (
-    <Screen>
+    <Screen onRefresh={() => void refresh()} refreshing={isRefreshing}>
       <Text style={styles.eyebrow}>{t("todaysDiary")}</Text>
       <Text style={styles.title}>{t("writeHonestly")}</Text>
       <Text style={styles.subtitle}>{t("diaryPrivate")}</Text>
@@ -523,6 +573,24 @@ export default function WriteScreen() {
         </View>
       ) : (
         <>
+          {isEditingToday ? (
+            <View style={styles.editorModeHeader}>
+              <Text style={styles.editorModeTitle}>{t("editToday")}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("cancel")}
+                onPress={cancelEditingToday}
+                style={styles.cancelEdit}
+              >
+                <MaterialCommunityIcons
+                  color={colors.inkSoft}
+                  name="arrow-left"
+                  size={17}
+                />
+                <Text style={styles.cancelEditText}>{t("cancel")}</Text>
+              </Pressable>
+            </View>
+          ) : null}
           <Text style={styles.section}>{t("mood")}</Text>
           <View style={styles.moodRow}>
             {MOODS.map((option) => (

@@ -8,11 +8,14 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Screen } from "@/components/Screen";
+import { BottomSheet } from "@/components/BottomSheet";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
 import type { CircleInvitation, CircleSummary } from "@/types/api";
@@ -22,6 +25,7 @@ import { useSettings } from "@/settings/SettingsProvider";
 import { InlineAlert } from "@/components/InlineAlert";
 import { getDeviceTimeZone } from "@/utils/device";
 import { formatLocalDate, formatLocalTime } from "@/utils/date";
+import { CIRCLE_EMOJIS } from "@/features/circles/circleEmojis";
 
 function getDefaultBloomDate(): Date {
   const date = new Date();
@@ -50,6 +54,7 @@ export default function CirclesScreen() {
   const [isCreating, setIsCreating] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [name, setName] = useState("");
+  const [emoji, setEmoji] = useState<string>(CIRCLE_EMOJIS[0]);
   const [bloomAt, setBloomAt] = useState<Date>(getDefaultBloomDate);
   const [pickerMode, setPickerMode] = useState<"date" | "time" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,11 +99,12 @@ export default function CirclesScreen() {
     try {
       await bloomApi.createCircle(session.accessToken, {
         name: name.trim(),
-        emoji: "🌱",
+        emoji,
         bloomAtUtc: bloomAt.toISOString(),
         timeZoneId: deviceTimeZone,
       });
       setName("");
+      setEmoji(CIRCLE_EMOJIS[0]);
       setBloomAt(getDefaultBloomDate());
       setShowCreateForm(false);
       await load(true);
@@ -111,7 +117,7 @@ export default function CirclesScreen() {
     } finally {
       setIsCreating(false);
     }
-  }, [bloomAt, deviceTimeZone, load, name, session?.accessToken, t]);
+  }, [bloomAt, deviceTimeZone, emoji, load, name, session?.accessToken, t]);
 
   const handleBloomPickerValueChange = useCallback(
     (_event: DateTimePickerChangeEvent, selected: Date) => {
@@ -162,80 +168,6 @@ export default function CirclesScreen() {
             <Text style={styles.addButtonText}>＋</Text>
           </Pressable>
         </View>
-
-        {showCreateForm ? (
-          <View style={styles.form}>
-            <Text style={styles.formTitle}>{t("plantCircle")}</Text>
-            <TextInput
-              accessibilityLabel={t("circleName")}
-              autoCapitalize="sentences"
-              placeholder={t("circleNamePlaceholder")}
-              placeholderTextColor={colors.inkSoft}
-              style={styles.input}
-              value={name}
-              onChangeText={setName}
-            />
-            <Text style={styles.label}>{t("bloomAfter")}</Text>
-            <View style={styles.bloomPickerRow}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t("bloomDate")}
-                onPress={() => setPickerMode("date")}
-                style={styles.bloomPickerButton}
-              >
-                <Text style={styles.bloomPickerLabel}>{t("bloomDate")}</Text>
-                <Text style={styles.bloomPickerValue}>
-                  {formatBloomDate(bloomAt)}
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t("bloomTime")}
-                onPress={() => setPickerMode("time")}
-                style={styles.bloomPickerButton}
-              >
-                <Text style={styles.bloomPickerLabel}>{t("bloomTime")}</Text>
-                <Text style={styles.bloomPickerValue}>
-                  {formatBloomTime(bloomAt)}
-                </Text>
-              </Pressable>
-            </View>
-            {pickerMode ? (
-              <View style={styles.pickerPanel}>
-                <DateTimePicker
-                  display={Platform.OS === "ios" ? "spinner" : "default"}
-                  minimumDate={pickerMode === "date" ? new Date() : undefined}
-                  mode={pickerMode}
-                  onDismiss={dismissBloomPicker}
-                  onValueChange={handleBloomPickerValueChange}
-                  timeZoneName={deviceTimeZone}
-                  value={bloomAt}
-                />
-                {Platform.OS === "ios" ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={dismissBloomPicker}
-                    style={styles.pickerDone}
-                  >
-                    <Text style={styles.pickerDoneText}>{t("done")}</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ) : null}
-            <Pressable
-              accessibilityRole="button"
-              disabled={isCreating}
-              style={styles.primaryButton}
-              onPress={() => void create()}
-            >
-              {isCreating ? (
-                <ActivityIndicator color={colors.card} />
-              ) : (
-                <Text style={styles.primaryButtonText}>{t("plantCircle")}</Text>
-              )}
-            </Pressable>
-          </View>
-        ) : null}
 
         {invitations.length > 0 ? (
           <View style={styles.invitations}>
@@ -321,6 +253,117 @@ export default function CirclesScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
+      <BottomSheet
+        backdropStyle={styles.sheetBackdrop}
+        onClose={() => setShowCreateForm(false)}
+        sheetStyle={styles.sheet}
+        visible={showCreateForm}
+      >
+        <View style={styles.sheetHandle} />
+        <View style={styles.sheetHeader}>
+          <Text style={styles.sheetTitle}>{t("plantCircle")}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("cancel")}
+            hitSlop={8}
+            onPress={() => setShowCreateForm(false)}
+            style={styles.sheetClose}
+          >
+            <MaterialCommunityIcons color={colors.inkSoft} name="close" size={20} />
+          </Pressable>
+        </View>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+              <TextInput
+                accessibilityLabel={t("circleName")}
+                autoCapitalize="sentences"
+                placeholder={t("circleNamePlaceholder")}
+                placeholderTextColor={colors.inkSoft}
+                style={styles.input}
+                value={name}
+                onChangeText={setName}
+              />
+              <Text style={styles.label}>{t("circleEmoji")}</Text>
+              <View style={styles.emojiGrid}>
+                {CIRCLE_EMOJIS.map((option) => (
+                  <Pressable
+                    accessibilityLabel={`${t("circleEmoji")} ${option}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: emoji === option }}
+                    key={option}
+                    onPress={() => setEmoji(option)}
+                    style={[
+                      styles.emojiOption,
+                      emoji === option ? styles.emojiOptionSelected : null,
+                    ]}
+                  >
+                    <Text style={styles.emojiOptionText}>{option}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.label}>{t("bloomAfter")}</Text>
+              <View style={styles.bloomPickerRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("bloomDate")}
+                  onPress={() => setPickerMode("date")}
+                  style={styles.bloomPickerButton}
+                >
+                  <Text style={styles.bloomPickerLabel}>{t("bloomDate")}</Text>
+                  <Text style={styles.bloomPickerValue}>
+                    {formatBloomDate(bloomAt)}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("bloomTime")}
+                  onPress={() => setPickerMode("time")}
+                  style={styles.bloomPickerButton}
+                >
+                  <Text style={styles.bloomPickerLabel}>{t("bloomTime")}</Text>
+                  <Text style={styles.bloomPickerValue}>
+                    {formatBloomTime(bloomAt)}
+                  </Text>
+                </Pressable>
+              </View>
+              {pickerMode ? (
+                <View style={styles.pickerPanel}>
+                  <DateTimePicker
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
+                    minimumDate={pickerMode === "date" ? new Date() : undefined}
+                    mode={pickerMode}
+                    onDismiss={dismissBloomPicker}
+                    onValueChange={handleBloomPickerValueChange}
+                    timeZoneName={deviceTimeZone}
+                    value={bloomAt}
+                  />
+                  {Platform.OS === "ios" ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={dismissBloomPicker}
+                      style={styles.pickerDone}
+                    >
+                      <Text style={styles.pickerDoneText}>{t("done")}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                disabled={isCreating}
+                style={styles.primaryButton}
+                onPress={() => void create()}
+              >
+                {isCreating ? (
+                  <ActivityIndicator color={colors.card} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>{t("plantCircle")}</Text>
+                )}
+              </Pressable>
+        </ScrollView>
+      </BottomSheet>
     </Screen>
   );
 }

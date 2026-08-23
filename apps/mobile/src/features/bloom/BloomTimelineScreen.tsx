@@ -7,7 +7,6 @@ import {
   Animated,
   AppState,
   useWindowDimensions,
-  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -16,6 +15,7 @@ import {
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen } from "@/components/Screen";
+import { BottomSheet } from "@/components/BottomSheet";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
 import type { CircleMember, TimelineDay, TimelineEntry } from "@/types/api";
@@ -394,20 +394,12 @@ export default function BloomTimelineScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
-      <Modal
-        animationType="slide"
-        onRequestClose={() => setFilterSheetVisible(false)}
-        transparent
+      <BottomSheet
+        backdropStyle={styles.sheetBackdrop}
+        onClose={() => setFilterSheetVisible(false)}
+        sheetStyle={styles.sheet}
         visible={filterSheetVisible}
       >
-        <Pressable
-          onPress={() => setFilterSheetVisible(false)}
-          style={styles.sheetBackdrop}
-        >
-          <Pressable
-            onPress={(event) => event.stopPropagation()}
-            style={styles.sheet}
-          >
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{t("filter")}</Text>
@@ -554,9 +546,7 @@ export default function BloomTimelineScreen() {
                 </Pressable>
               </View>
             </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      </BottomSheet>
     </Screen>
   );
 }

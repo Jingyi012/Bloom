@@ -5,7 +5,6 @@ import DateTimePicker, {
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Platform,
   Pressable,
   Switch,
@@ -15,6 +14,7 @@ import {
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Screen } from "@/components/Screen";
+import { BottomSheet } from "@/components/BottomSheet";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
 import type { UserStatsResponse } from "@/types/api";
@@ -259,22 +259,12 @@ export default function ProfileScreen() {
           <Text style={styles.dangerText}>{t("deleteAccount")}</Text>
         </Pressable>
       </View>
-      <Modal
-        animationType="slide"
-        onRequestClose={() => setSheet(null)}
-        transparent
+      <BottomSheet
+        backdropStyle={styles.sheetBackdrop}
+        onClose={() => setSheet(null)}
+        sheetStyle={styles.sheet}
         visible={sheet !== null}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("cancel")}
-          onPress={() => setSheet(null)}
-          style={styles.sheetBackdrop}
-        >
-          <Pressable
-            onPress={(event) => event.stopPropagation()}
-            style={styles.sheet}
-          >
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>
@@ -439,9 +429,7 @@ export default function ProfileScreen() {
                 </Pressable>
               </>
             )}
-          </Pressable>
-        </Pressable>
-      </Modal>
+      </BottomSheet>
     </Screen>
   );
 }
