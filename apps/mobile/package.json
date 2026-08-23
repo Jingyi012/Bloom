@@ -36,6 +36,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
+    "react-dom": "19.1.0",
+    "scheduler": "0.26.0",
     "typescript": "^5.9.2"
   }
 }
