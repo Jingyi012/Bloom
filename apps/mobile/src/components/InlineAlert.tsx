@@ -1,4 +1,5 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useEffect, useRef } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { alertStyles as styles } from '@/styles/alert.styles';
 import { useSettings } from '@/settings/SettingsProvider';
@@ -8,6 +9,12 @@ export type InlineAlertVariant = 'error' | 'success';
 export function InlineAlert({ message, onDismiss, variant = 'error' }: { message: string; onDismiss: () => void; variant?: InlineAlertVariant }) {
   const isSuccess = variant === 'success';
   const { t } = useSettings();
+  const dismissRef = useRef(onDismiss);
+  dismissRef.current = onDismiss;
+  useEffect(() => {
+    const timeout = setTimeout(() => dismissRef.current(), 5000);
+    return () => clearTimeout(timeout);
+  }, [message]);
   const iconColor = isSuccess ? '#2F6B52' : '#B42318';
   const displayMessage = message.startsWith('Bloom API request failed') ? t('requestFailed') : message;
   return (
