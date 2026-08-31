@@ -1,5 +1,6 @@
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
+import { useQueryClient } from "@tanstack/react-query";
 import { Platform } from "react-native";
 import {
   createContext,
@@ -35,6 +36,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const { t } = useSettings();
+  const queryClient = useQueryClient();
   const googleClientIds = getGoogleClientIds();
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
     {
@@ -68,11 +70,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return nextSession.accessToken;
     } catch {
       await clearSession();
+      queryClient.clear();
       setSession(null);
       setUser(null);
       return null;
     }
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => configureSessionRefresh(refreshAccessToken), [refreshAccessToken]);
 
@@ -166,9 +169,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const signOut = useCallback(async () => {
     await clearSession();
+    queryClient.clear();
     setSession(null);
     setUser(null);
-  }, []);
+  }, [queryClient]);
   const clearError = useCallback(() => setError(null), []);
   const updateUser = useCallback(
     (nextUser: CurrentUserResponse) => setUser(nextUser),

@@ -1,6 +1,7 @@
 import { FlashList } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import DateTimePicker, {
   type DateTimePickerChangeEvent,
 } from "@react-native-community/datetimepicker";
@@ -18,7 +19,7 @@ import { Screen } from "@/components/Screen";
 import { BottomSheet } from "@/components/BottomSheet";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
-import type { CircleInvitation, CircleSummary } from "@/types/api";
+import type { CircleSummary } from "@/types/api";
 import { colors } from "@/styles/tokens";
 import { circlesStyles as styles } from "@/styles/screens/circles.styles";
 import { useSettings } from "@/settings/SettingsProvider";
@@ -26,6 +27,7 @@ import { InlineAlert } from "@/components/InlineAlert";
 import { getDeviceTimeZone } from "@/utils/device";
 import { formatLocalDate, formatLocalTime } from "@/utils/date";
 import { CIRCLE_EMOJIS } from "@/features/circles/circleEmojis";
+import { queryKeys } from "@/query/queryKeys";
 
 function getDefaultBloomDate(): Date {
   const date = new Date();
@@ -47,65 +49,63 @@ export default function CirclesScreen() {
   const { session } = useAuth();
   const { t } = useSettings();
   const deviceTimeZone = useMemo(() => getDeviceTimeZone(), []);
-  const [circles, setCircles] = useState<CircleSummary[]>([]);
-  const [invitations, setInvitations] = useState<CircleInvitation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
+  const queryClient = useQueryClient();
+  const circlesQuery = useQuery({
+    queryKey: queryKeys.circles,
+    queryFn: () => bloomApi.listCircles(session!.accessToken),
+    enabled: Boolean(session?.accessToken),
+  });
+  const invitationsQuery = useQuery({
+    queryKey: queryKeys.invitations,
+    queryFn: () => bloomApi.listCircleInvitations(session!.accessToken),
+    enabled: Boolean(session?.accessToken),
+  });
+  const circles = circlesQuery.data ?? [];
+  const invitations = invitationsQuery.data ?? [];
+  const isLoading = circlesQuery.isPending || invitationsQuery.isPending;
+  const isRefreshing = (circlesQuery.isFetching || invitationsQuery.isFetching) && !isLoading;
+  const queryError = circlesQuery.error ?? invitationsQuery.error;
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState<string>(CIRCLE_EMOJIS[0]);
   const [bloomAt, setBloomAt] = useState<Date>(getDefaultBloomDate);
   const [pickerMode, setPickerMode] = useState<"date" | "time" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const loadInFlightRef = useRef(false);
-  const createInFlightRef = useRef(false);
-  const invitationInFlightRef = useRef(new Set<string>());
-
-  const load = useCallback(
-    async (refresh = false) => {
-      if (!session?.accessToken) return;
-      if (loadInFlightRef.current) return;
-      loadInFlightRef.current = true;
-      refresh ? setIsRefreshing(true) : setIsLoading(true);
-      setError(null);
-      try {
-        const [nextCircles, nextInvitations] = await Promise.all([
-          bloomApi.listCircles(session.accessToken),
-          bloomApi.listCircleInvitations(session.accessToken),
-        ]);
-        setCircles(nextCircles);
-        setInvitations(nextInvitations);
-      } catch (loadError) {
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : t("circleLoadFailed"),
-        );
-      } finally {
-        loadInFlightRef.current = false;
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
+  const createMutation = useMutation({
+    mutationFn: (request: Parameters<typeof bloomApi.createCircle>[1]) =>
+      bloomApi.createCircle(session!.accessToken, request),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.circles }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+      ]);
     },
-    [session?.accessToken, t],
-  );
+  });
+  const respondMutation = useMutation({
+    mutationFn: ({ invitationId, accept }: { invitationId: string; accept: boolean }) =>
+      bloomApi.respondToCircleInvitation(session!.accessToken, invitationId, accept),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.invitations }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.circles }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+      ]);
+    },
+  });
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const load = useCallback(async () => {
+    await Promise.all([circlesQuery.refetch(), invitationsQuery.refetch()]);
+  }, [circlesQuery, invitationsQuery]);
 
   const create = useCallback(async () => {
     if (!session?.accessToken || !name.trim()) {
       setError(t("circleNameRequired"));
       return;
     }
-    if (createInFlightRef.current) return;
-    createInFlightRef.current = true;
-    setIsCreating(true);
+    if (createMutation.isPending) return;
     setError(null);
     try {
-      await bloomApi.createCircle(session.accessToken, {
+      await createMutation.mutateAsync({
         name: name.trim(),
         emoji,
         bloomAtUtc: bloomAt.toISOString(),
@@ -115,7 +115,7 @@ export default function CirclesScreen() {
       setEmoji(CIRCLE_EMOJIS[0]);
       setBloomAt(getDefaultBloomDate());
       setShowCreateForm(false);
-      await load(true);
+      await load();
     } catch (createError) {
       setError(
         createError instanceof Error
@@ -123,10 +123,8 @@ export default function CirclesScreen() {
           : t("circleCreateFailed"),
       );
     } finally {
-      createInFlightRef.current = false;
-      setIsCreating(false);
     }
-  }, [bloomAt, deviceTimeZone, emoji, load, name, session?.accessToken, t]);
+  }, [bloomAt, createMutation, deviceTimeZone, emoji, load, name, session?.accessToken, t]);
 
   const handleBloomPickerValueChange = useCallback(
     (_event: DateTimePickerChangeEvent, selected: Date) => {
@@ -141,26 +139,18 @@ export default function CirclesScreen() {
   const respond = useCallback(
     async (invitationId: string, accept: boolean) => {
       if (!session?.accessToken) return;
-      if (invitationInFlightRef.current.has(invitationId)) return;
-      invitationInFlightRef.current.add(invitationId);
       try {
-        await bloomApi.respondToCircleInvitation(
-          session.accessToken,
-          invitationId,
-          accept,
-        );
-        await load(true);
+        await respondMutation.mutateAsync({ invitationId, accept });
+        await load();
       } catch (responseError) {
         setError(
           responseError instanceof Error
             ? responseError.message
           : t("invitationUpdateFailed"),
         );
-      } finally {
-        invitationInFlightRef.current.delete(invitationId);
       }
     },
-    [load, session?.accessToken, t],
+    [load, respondMutation, session?.accessToken, t],
   );
 
   const header = useMemo(
@@ -213,8 +203,14 @@ export default function CirclesScreen() {
           </View>
         ) : null}
 
-        {error ? (
-          <InlineAlert message={error} onDismiss={() => setError(null)} />
+        {error || queryError ? (
+          <InlineAlert
+            message={error ?? (queryError instanceof Error ? queryError.message : t("circleLoadFailed"))}
+            onDismiss={() => {
+              setError(null);
+              void load();
+            }}
+          />
         ) : null}
         <Text style={styles.sectionTitle}>{t("activeCirclesTitle")}</Text>
       </View>
@@ -227,7 +223,7 @@ export default function CirclesScreen() {
       error,
       handleBloomPickerValueChange,
       invitations,
-      isCreating,
+      createMutation.isPending,
       name,
       pickerMode,
       respond,
@@ -250,7 +246,7 @@ export default function CirclesScreen() {
             <Text style={styles.empty}>{t("noCirclesYet")}</Text>
           }
           ListHeaderComponent={header}
-          onRefresh={() => void load(true)}
+          onRefresh={() => void load()}
           refreshing={isRefreshing}
           renderItem={({ item }) => (
             <CircleCard
@@ -365,11 +361,11 @@ export default function CirclesScreen() {
               ) : null}
               <Pressable
                 accessibilityRole="button"
-                disabled={isCreating}
+                disabled={createMutation.isPending}
                 style={styles.primaryButton}
                 onPress={() => void create()}
               >
-                {isCreating ? (
+                {createMutation.isPending ? (
                   <ActivityIndicator color={colors.card} />
                 ) : (
                   <Text style={styles.primaryButtonText}>{t("plantCircle")}</Text>

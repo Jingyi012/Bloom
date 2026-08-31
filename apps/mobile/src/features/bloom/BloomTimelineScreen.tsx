@@ -1,11 +1,12 @@
 import { FlashList } from "@shopify/flash-list";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { InfiniteData } from "@tanstack/react-query";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   ActivityIndicator,
   Animated,
-  AppState,
   useWindowDimensions,
   Pressable,
   ScrollView,
@@ -18,7 +19,7 @@ import { Screen } from "@/components/Screen";
 import { BottomSheet } from "@/components/BottomSheet";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
-import type { CircleMember, TimelineDay, TimelineEntry } from "@/types/api";
+import type { TimelineDay, TimelineEntry, TimelineResponse } from "@/types/api";
 import { colors } from "@/styles/tokens";
 import { bloomStyles as styles } from "@/styles/screens/bloom.styles";
 import { InlineAlert } from "@/components/InlineAlert";
@@ -34,6 +35,7 @@ import {
   parseLocalDateValue,
   toLocalDateValue,
 } from "@/utils/date";
+import { queryKeys } from "@/query/queryKeys";
 
 export default function BloomTimelineScreen() {
   const { circleId, circleName, circleEmoji } = useLocalSearchParams<{
@@ -44,140 +46,55 @@ export default function BloomTimelineScreen() {
   const router = useRouter();
   const { session } = useAuth();
   const { t } = useSettings();
-  const [days, setDays] = useState<TimelineDay[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const [members, setMembers] = useState<CircleMember[]>([]);
   const [filterSheetVisible, setFilterSheetVisible] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
   const [draftDate, setDraftDate] = useState<Date | null>(null);
   const [draftAuthorId, setDraftAuthorId] = useState<string | null>(null);
-  const loadingMoreRef = useRef(false);
   const reactionInFlightRef = useRef(new Set<string>());
 
-  const load = useCallback(
-    async (refresh = false) => {
-      if (!session?.accessToken || !circleId) return;
-      refresh ? setIsRefreshing(true) : setIsLoading(true);
-      setError(null);
-      try {
-        const page = await bloomApi.getTimeline(
-          session.accessToken,
-          circleId,
-          undefined,
-          selectedDate ?? undefined,
-          selectedAuthorId ?? undefined,
-        );
-        setDays(page.days);
-        setNextCursor(page.nextCursor);
-      } catch (loadError) {
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : t("timelineLoadFailed"),
-        );
-      } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
-    },
-    [circleId, selectedAuthorId, selectedDate, session?.accessToken, t],
+  const timelineQuery = useInfiniteQuery({
+    queryKey: queryKeys.timeline(circleId ?? "", selectedDate ?? undefined, selectedAuthorId ?? undefined),
+    queryFn: ({ pageParam }) => bloomApi.getTimeline(
+      session!.accessToken,
+      circleId!,
+      pageParam,
+      selectedDate ?? undefined,
+      selectedAuthorId ?? undefined,
+    ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: Boolean(session?.accessToken && circleId),
+  });
+  const days = useMemo(
+    () => timelineQuery.data?.pages.flatMap((page) => page.days) ?? [],
+    [timelineQuery.data],
   );
-
+  const isLoading = timelineQuery.isPending;
+  const isRefreshing = timelineQuery.isRefetching && !timelineQuery.isPending;
+  const isLoadingMore = timelineQuery.isFetchingNextPage;
+  const nextCursor = timelineQuery.hasNextPage ? "available" : null;
+  const circleQuery = useQuery({
+    queryKey: queryKeys.circle(circleId ?? ""),
+    queryFn: () => bloomApi.getCircle(session!.accessToken, circleId!),
+    enabled: Boolean(session?.accessToken && circleId),
+  });
+  const members = useMemo(
+    () => circleQuery.data?.members.filter((member) => member.isActive) ?? [],
+    [circleQuery.data],
+  );
+  const load = useCallback(async () => {
+    setError(null);
+    await timelineQuery.refetch();
+  }, [timelineQuery]);
   const loadMore = useCallback(async () => {
-    if (
-      !session?.accessToken ||
-      !circleId ||
-      !nextCursor ||
-      isLoading ||
-      isRefreshing ||
-      loadingMoreRef.current
-    )
-      return;
-    loadingMoreRef.current = true;
-    setIsLoadingMore(true);
-    try {
-      const page = await bloomApi.getTimeline(
-        session.accessToken,
-        circleId,
-        nextCursor,
-        selectedDate ?? undefined,
-        selectedAuthorId ?? undefined,
-      );
-      setDays((current) => {
-        const merged = current.map((day) => ({
-          ...day,
-          entries: [...day.entries],
-        }));
-        for (const incomingDay of page.days) {
-          const existingDay = merged.find(
-            (day) => day.date === incomingDay.date,
-          );
-          if (!existingDay) {
-            merged.push(incomingDay);
-            continue;
-          }
-          const existingIds = new Set(
-            existingDay.entries.map((entry) => entry.publicationId),
-          );
-          existingDay.entries = [
-            ...existingDay.entries,
-            ...incomingDay.entries.filter(
-              (entry) => !existingIds.has(entry.publicationId),
-            ),
-          ];
-        }
-        return merged;
-      });
-      setNextCursor(page.nextCursor);
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : t("timelineLoadFailed"),
-      );
-    } finally {
-      loadingMoreRef.current = false;
-      setIsLoadingMore(false);
+    if (timelineQuery.hasNextPage && !timelineQuery.isFetchingNextPage) {
+      await timelineQuery.fetchNextPage();
     }
-  }, [
-    circleId,
-    isLoading,
-    isRefreshing,
-    nextCursor,
-    selectedAuthorId,
-    selectedDate,
-    session?.accessToken,
-    t,
-  ]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") void load(true);
-    });
-    return () => subscription.remove();
-  }, [load]);
-
-  useEffect(() => {
-    const loadMembers = async () => {
-      if (!session?.accessToken || !circleId) return;
-      try {
-        const detail = await bloomApi.getCircle(session.accessToken, circleId);
-        setMembers(detail.members.filter((member) => member.isActive));
-      } catch {
-        // Timeline data remains useful when the member list cannot be loaded.
-      }
-    };
-    void loadMembers();
-  }, [circleId, session?.accessToken]);
+  }, [timelineQuery]);
 
   const openFilterSheet = useCallback(() => {
     setDraftDate(selectedDate ? parseLocalDateValue(selectedDate) : null);
@@ -188,38 +105,20 @@ export default function BloomTimelineScreen() {
 
   const applyFilters = useCallback(() => {
     const nextDate = draftDate ? toLocalDateValue(draftDate) : null;
-    const filtersChanged =
-      nextDate !== selectedDate || draftAuthorId !== selectedAuthorId;
     setSelectedDate(nextDate);
     setSelectedAuthorId(draftAuthorId);
     setFilterSheetVisible(false);
     setShowDatePicker(false);
-    if (filtersChanged) {
-      setDays([]);
-      setNextCursor(null);
-      loadingMoreRef.current = false;
-    } else {
-      void load(true);
-    }
-  }, [draftAuthorId, draftDate, load, selectedAuthorId, selectedDate]);
+  }, [draftAuthorId, draftDate]);
 
   const resetFilters = useCallback(() => {
-    const filtersWereActive =
-      selectedDate !== null || selectedAuthorId !== null;
     setDraftDate(null);
     setDraftAuthorId(null);
     setSelectedDate(null);
     setSelectedAuthorId(null);
     setFilterSheetVisible(false);
     setShowDatePicker(false);
-    if (filtersWereActive) {
-      setDays([]);
-      setNextCursor(null);
-      loadingMoreRef.current = false;
-    } else {
-      void load(true);
-    }
-  }, [load, selectedAuthorId, selectedDate]);
+  }, []);
 
   const selectedMemberName = selectedAuthorId
     ? members.find((member) => member.userId === selectedAuthorId)?.displayName
@@ -249,24 +148,32 @@ export default function BloomTimelineScreen() {
               entry.publicationId,
               code,
             );
-        setDays((currentDays) =>
-          currentDays.map((day) => ({
-            ...day,
-            entries: day.entries.map((item) =>
-              item.publicationId === entry.publicationId
-                ? {
-                    ...item,
-                    reactions: [
-                      ...item.reactions.filter(
-                        (reaction) => reaction.emojiCode !== code,
-                      ),
-                      result,
-                    ],
-                  }
-                : item,
-            ),
-          })),
+        queryClient.setQueryData<InfiniteData<TimelineResponse>>(
+          queryKeys.timeline(circleId ?? "", selectedDate ?? undefined, selectedAuthorId ?? undefined),
+          (currentData) => currentData
+            ? {
+                ...currentData,
+                pages: currentData.pages.map((page) => ({
+                  ...page,
+                  days: page.days.map((day) => ({
+                    ...day,
+                    entries: day.entries.map((item) =>
+                      item.publicationId === entry.publicationId
+                        ? {
+                            ...item,
+                            reactions: [
+                              ...item.reactions.filter((reaction) => reaction.emojiCode !== code),
+                              result,
+                            ],
+                          }
+                        : item,
+                    ),
+                  })),
+                })),
+              }
+            : currentData,
         );
+        void queryClient.invalidateQueries({ queryKey: queryKeys.entry(entry.publicationId) });
       } catch (reactionError) {
         setError(
           reactionError instanceof Error
@@ -277,7 +184,7 @@ export default function BloomTimelineScreen() {
         reactionInFlightRef.current.delete(entry.publicationId);
       }
     },
-    [session?.accessToken, t],
+    [circleId, queryClient, selectedAuthorId, selectedDate, session?.accessToken, t],
   );
 
   return (
@@ -356,8 +263,11 @@ export default function BloomTimelineScreen() {
           </View>
         ) : null}
       </View>
-      {error ? (
-        <InlineAlert message={error} onDismiss={() => setError(null)} />
+      {error || timelineQuery.error ? (
+        <InlineAlert
+          message={error ?? (timelineQuery.error instanceof Error ? timelineQuery.error.message : t("timelineLoadFailed"))}
+          onDismiss={() => void load()}
+        />
       ) : null}
       {isLoading ? (
         <View style={styles.loading}>
@@ -383,7 +293,7 @@ export default function BloomTimelineScreen() {
           }
           onEndReached={() => void loadMore()}
           onEndReachedThreshold={0.6}
-          onRefresh={() => void load(true)}
+          onRefresh={() => void load()}
           refreshing={isRefreshing}
           renderItem={({ item }) => (
             <DaySection

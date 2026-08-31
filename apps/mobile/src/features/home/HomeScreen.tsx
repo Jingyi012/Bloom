@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   ActivityIndicator,
-  AppState,
   Pressable,
   Text,
   View,
@@ -17,56 +17,30 @@ import { useSettings } from "@/settings/SettingsProvider";
 import type { TranslationKey } from "@/settings/SettingsProvider";
 import { InlineAlert } from "@/components/InlineAlert";
 import { formatLocalDate } from "@/utils/date";
+import { queryKeys } from "@/query/queryKeys";
 
 export default function HomeScreen() {
   const router = useRouter();
   const { session, user } = useAuth();
   const { t } = useSettings();
-  const [circles, setCircles] = useState<CircleSummary[]>([]);
-  const [stats, setStats] = useState<UserStatsResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const loadInFlightRef = useRef(false);
-
-  const load = useCallback(
-    async (refresh = false) => {
-      if (!session?.accessToken) return;
-      if (loadInFlightRef.current) return;
-      loadInFlightRef.current = true;
-      refresh ? setIsRefreshing(true) : setIsLoading(true);
-      setError(null);
-      try {
-        const [nextCircles, nextStats] = await Promise.all([
-          bloomApi.listCircles(session.accessToken),
-          bloomApi.stats(session.accessToken),
-        ]);
-        setCircles(nextCircles);
-        setStats(nextStats);
-      } catch (loadError) {
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : t("gardenLoadFailed"),
-        );
-      } finally {
-        loadInFlightRef.current = false;
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
-    },
-    [session?.accessToken, t],
-  );
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") void load(true);
-    });
-    return () => subscription.remove();
-  }, [load]);
+  const circlesQuery = useQuery({
+    queryKey: queryKeys.circles,
+    queryFn: () => bloomApi.listCircles(session!.accessToken),
+    enabled: Boolean(session?.accessToken),
+  });
+  const statsQuery = useQuery({
+    queryKey: queryKeys.stats,
+    queryFn: () => bloomApi.stats(session!.accessToken),
+    enabled: Boolean(session?.accessToken),
+  });
+  const circles = circlesQuery.data ?? [];
+  const stats = statsQuery.data;
+  const isLoading = circlesQuery.isPending || statsQuery.isPending;
+  const isRefreshing = circlesQuery.isFetching || statsQuery.isFetching;
+  const error = circlesQuery.error ?? statsQuery.error;
+  const refresh = useCallback(async () => {
+    await Promise.all([circlesQuery.refetch(), statsQuery.refetch()]);
+  }, [circlesQuery, statsQuery]);
 
   const upcoming = circles
     .filter((circle) => circle.status !== "Bloomed")
@@ -77,7 +51,7 @@ export default function HomeScreen() {
   const firstName = user?.displayName.split(" ")[0] || t("friend");
 
   return (
-    <Screen onRefresh={() => void load(true)} refreshing={isRefreshing}>
+    <Screen onRefresh={() => void refresh()} refreshing={isRefreshing}>
       <Text style={styles.eyebrow}>{greeting(t)}</Text>
       <Text style={styles.title}>
         {t("hi")} {firstName} <Text style={styles.titleDecor}>🌙</Text>
@@ -92,7 +66,10 @@ export default function HomeScreen() {
         <Text style={styles.ctaAction}>{t("openEditor")}</Text>
       </Pressable>
       {error ? (
-        <InlineAlert message={error} onDismiss={() => setError(null)} />
+        <InlineAlert
+          message={error instanceof Error ? error.message : t("gardenLoadFailed")}
+          onDismiss={() => void refresh()}
+        />
       ) : null}
       {isLoading ? (
         <View style={styles.loading}>

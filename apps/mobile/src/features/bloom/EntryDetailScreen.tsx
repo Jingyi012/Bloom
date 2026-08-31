@@ -1,5 +1,6 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -15,6 +16,7 @@ import { entryDetailStyles as styles } from '@/styles/screens/entry-detail.style
 import { useSettings } from '@/settings/SettingsProvider';
 import { REACTION_OPTIONS, type ReactionCode } from '@/features/bloom/reactions';
 import { formatLocalCommentTime, formatLocalDate, formatLocalTime } from '@/utils/date';
+import { queryKeys } from '@/query/queryKeys';
 
 export default function EntryDetailScreen() {
   const { publicationId: rawPublicationId } = useLocalSearchParams<{ publicationId?: string | string[] }>();
@@ -23,94 +25,92 @@ export default function EntryDetailScreen() {
   const { session } = useAuth();
   const { language, t } = useSettings();
   const insets = useSafeAreaInsets();
-  const [entry, setEntry] = useState<TimelineEntry | null>(null);
-  const [comments, setComments] = useState<ApiComment[]>([]);
+  const queryClient = useQueryClient();
+  const entryQuery = useQuery({
+    queryKey: queryKeys.entry(publicationId ?? ''),
+    queryFn: () => bloomApi.getEntry(session!.accessToken, publicationId!),
+    enabled: Boolean(session?.accessToken && publicationId),
+  });
+  const commentsQuery = useQuery({
+    queryKey: queryKeys.comments(publicationId ?? ''),
+    queryFn: () => bloomApi.getComments(session!.accessToken, publicationId!),
+    enabled: Boolean(session?.accessToken && publicationId),
+  });
+  const entry = entryQuery.data ?? null;
+  const comments: ApiComment[] = commentsQuery.data?.items ?? [];
   const [draft, setDraft] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isPosting, setIsPosting] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const suppressNextReactionPress = useRef(false);
-  const reactionInFlightRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
-  const loadInFlightRef = useRef(false);
-  const commentInFlightRef = useRef(false);
 
-  const load = useCallback(async (refresh = false) => {
-    if (!session?.accessToken || !publicationId) return;
-    if (loadInFlightRef.current) return;
-    loadInFlightRef.current = true;
-    refresh ? setIsRefreshing(true) : setIsLoading(true);
+  const isLoading = entryQuery.isPending;
+  const isRefreshing = (entryQuery.isRefetching || commentsQuery.isRefetching) && !isLoading;
+  const refresh = useCallback(async () => {
     setError(null);
-    try {
-      const result = await bloomApi.getEntry(session.accessToken, publicationId);
-      setEntry(result);
-      try {
-        const commentPage = await bloomApi.getComments(session.accessToken, publicationId);
-        setComments(commentPage.items);
-      } catch (commentError) {
-        setError(commentError instanceof Error ? commentError.message : t('commentsLoadFailed'));
-      }
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : t('entryLoadFailed'));
-    } finally {
-      loadInFlightRef.current = false;
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [publicationId, session?.accessToken, t]);
+    await Promise.all([entryQuery.refetch(), commentsQuery.refetch()]);
+  }, [commentsQuery, entryQuery]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const updateReaction = useCallback(async (code: ReactionCode) => {
-    if (!session?.accessToken || !entry) return;
-    if (reactionInFlightRef.current) return;
-    reactionInFlightRef.current = true;
-    setError(null);
-    const current = entry.reactions.find((reaction) => reaction.emojiCode === code);
-    try {
-      const result = current?.reactedByCurrentUser
-        ? await bloomApi.removeReaction(session.accessToken, entry.publicationId, code)
-        : await bloomApi.addReaction(session.accessToken, entry.publicationId, code);
-      setEntry((currentEntry) => currentEntry ? {
-        ...currentEntry,
-        reactions: [
-          ...currentEntry.reactions.filter((reaction) => reaction.emojiCode !== code),
-          result,
-        ],
-      } : currentEntry);
+  const reactionMutation = useMutation({
+    mutationFn: async (code: ReactionCode) => {
+      if (!session?.accessToken || !entry) throw new Error(t('entryLoadFailed'));
+      const current = entry.reactions.find((reaction) => reaction.emojiCode === code);
+      return current?.reactedByCurrentUser
+        ? bloomApi.removeReaction(session.accessToken, entry.publicationId, code)
+        : bloomApi.addReaction(session.accessToken, entry.publicationId, code);
+    },
+    onSuccess: (result, code) => {
+      if (!publicationId) return;
+      queryClient.setQueryData<TimelineEntry>(queryKeys.entry(publicationId), (currentEntry) => currentEntry
+        ? {
+            ...currentEntry,
+            reactions: [
+              ...currentEntry.reactions.filter((reaction) => reaction.emojiCode !== code),
+              result,
+            ],
+          }
+        : currentEntry);
+      void queryClient.invalidateQueries({ queryKey: ["timeline"] });
       setShowReactionPicker(false);
-    } catch (reactionError) {
-      setError(reactionError instanceof Error ? reactionError.message : t('reactionUpdateFailed'));
-    } finally {
-      reactionInFlightRef.current = false;
-    }
-  }, [entry, session?.accessToken, t]);
+    },
+    onError: (reactionError) => setError(reactionError instanceof Error ? reactionError.message : t('reactionUpdateFailed')),
+  });
+
+  const updateReaction = useCallback((code: ReactionCode) => {
+    if (reactionMutation.isPending || !entry) return;
+    setError(null);
+    reactionMutation.mutate(code);
+  }, [entry, reactionMutation]);
 
   const currentUserReaction = entry?.reactions.find((reaction) => reaction.reactedByCurrentUser);
   const selectedReaction = REACTION_OPTIONS.find((option) => option.code === currentUserReaction?.emojiCode) ?? REACTION_OPTIONS[0];
 
-  const addComment = useCallback(async () => {
-    const body = draft.trim();
-    if (!body || !session?.accessToken || !entry || isPosting) return;
-    if (commentInFlightRef.current) return;
-    commentInFlightRef.current = true;
-    setIsPosting(true);
-    setError(null);
-    try {
-      const comment = await bloomApi.addComment(session.accessToken, entry.publicationId, body);
-      setComments((current) => [...current, comment]);
+  const commentMutation = useMutation({
+    mutationFn: (body: string) => {
+      if (!session?.accessToken || !entry) throw new Error(t('entryLoadFailed'));
+      return bloomApi.addComment(session.accessToken, entry.publicationId, body);
+    },
+    onSuccess: (comment) => {
+      if (!publicationId) return;
+      queryClient.setQueryData(queryKeys.comments(publicationId), (current: { items: ApiComment[]; nextCursor?: string | null } | undefined) => current
+        ? { ...current, items: [...current.items, comment] }
+        : { items: [comment], nextCursor: null });
+      queryClient.setQueryData<TimelineEntry>(queryKeys.entry(publicationId), (currentEntry) => currentEntry
+        ? { ...currentEntry, commentCount: currentEntry.commentCount + 1 }
+        : currentEntry);
+      void queryClient.invalidateQueries({ queryKey: ["timeline"] });
       setDraft('');
-      setEntry((currentEntry) => currentEntry ? { ...currentEntry, commentCount: currentEntry.commentCount + 1 } : currentEntry);
-    } catch (commentError) {
-      setError(commentError instanceof Error ? commentError.message : t('commentAddFailed'));
-    } finally {
-      commentInFlightRef.current = false;
-      setIsPosting(false);
-    }
-  }, [draft, entry, isPosting, session?.accessToken, t]);
+    },
+    onError: (commentError) => setError(commentError instanceof Error ? commentError.message : t('commentAddFailed')),
+  });
+
+  const addComment = useCallback(() => {
+    const body = draft.trim();
+    if (!body || !entry || commentMutation.isPending) return;
+    setError(null);
+    commentMutation.mutate(body);
+  }, [commentMutation, draft, entry]);
+
+  const posting = commentMutation.isPending;
 
   if (isLoading) {
     return (
@@ -131,7 +131,7 @@ export default function EntryDetailScreen() {
       >
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          refreshControl={<RefreshControl onRefresh={() => void load(true)} refreshing={isRefreshing} />}
+          refreshControl={<RefreshControl onRefresh={() => void refresh()} refreshing={isRefreshing} />}
           style={styles.detailScroll}
           contentContainerStyle={styles.detailScrollContent}
         >
@@ -147,7 +147,12 @@ export default function EntryDetailScreen() {
             </Pressable>
             <Text style={styles.title}>{entry?.authorDisplayName ?? t('entryDetail')}</Text>
           </View>
-          {error ? <InlineAlert message={error} onDismiss={() => setError(null)} /> : null}
+          {error || entryQuery.error || commentsQuery.error ? (
+            <InlineAlert
+              message={error ?? (entryQuery.error instanceof Error ? entryQuery.error.message : commentsQuery.error instanceof Error ? commentsQuery.error.message : t('entryLoadFailed'))}
+              onDismiss={() => setError(null)}
+            />
+          ) : null}
           {!entry ? (
             <InlineAlert message={t('entryLoadFailed')} onDismiss={() => setError(null)} />
           ) : (
@@ -262,7 +267,7 @@ export default function EntryDetailScreen() {
             <View style={styles.composer}>
               <TextInput
                 accessibilityLabel={t('comment')}
-                editable={!isPosting}
+                editable={!posting}
                 maxLength={1000}
                 multiline
                 onChangeText={setDraft}
@@ -275,9 +280,9 @@ export default function EntryDetailScreen() {
               <Pressable
                 accessibilityLabel={t('post')}
                 accessibilityRole="button"
-                disabled={!draft.trim() || isPosting}
+                disabled={!draft.trim() || posting}
                 onPress={() => void addComment()}
-                style={[styles.sendButton, !draft.trim() || isPosting ? styles.sendButtonDisabled : null]}
+                style={[styles.sendButton, !draft.trim() || posting ? styles.sendButtonDisabled : null]}
               >
                 <MaterialCommunityIcons color={colors.card} name="send" size={17} />
               </Pressable>

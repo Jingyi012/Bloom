@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ActivityIndicator,
   Alert,
@@ -17,7 +18,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Screen } from "@/components/Screen";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
-import type { CircleSummary, TodayEntryStatus } from "@/types/api";
+import type { CircleSummary, EntrySubmissionRequest, TodayEntryStatus, UpdateTodayEntryRequest } from "@/types/api";
 import { colors } from "@/styles/tokens";
 import { writeStyles as styles } from "@/styles/screens/write.styles";
 import {
@@ -30,6 +31,7 @@ import { useSettings } from "@/settings/SettingsProvider";
 import { InlineAlert } from "@/components/InlineAlert";
 import { getDeviceTimeZone } from "@/utils/device";
 import { formatLocalDateTime } from "@/utils/date";
+import { queryKeys } from "@/query/queryKeys";
 
 const MOODS = [
   { key: "heavy", emoji: "😢" },
@@ -96,26 +98,30 @@ export default function WriteScreen() {
   const router = useRouter();
   const { session, user } = useAuth();
   const { t } = useSettings();
-  const [circles, setCircles] = useState<CircleSummary[]>([]);
+  const queryClient = useQueryClient();
+  const circlesQuery = useQuery({
+    queryKey: queryKeys.circles,
+    queryFn: () => bloomApi.listCircles(session!.accessToken),
+    enabled: Boolean(session?.accessToken),
+  });
+  const todayQuery = useQuery({
+    queryKey: queryKeys.todayEntry,
+    queryFn: () => bloomApi.getTodayEntry(session!.accessToken),
+    enabled: Boolean(session?.accessToken),
+  });
+  const circles: CircleSummary[] = circlesQuery.data ?? [];
+  const todayStatus: TodayEntryStatus | null = todayQuery.data ?? null;
   const [selectedCircleIds, setSelectedCircleIds] = useState<string[]>([]);
   const [text, setText] = useState("");
   const [mood, setMood] = useState<string | undefined>();
   const [promptKey, setPromptKey] = useState<string | undefined>();
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isTodayStatusLoading, setIsTodayStatusLoading] = useState(true);
-  const [todayStatus, setTodayStatus] = useState<TodayEntryStatus | null>(null);
   const [isEditingToday, setIsEditingToday] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [imageUris, setImageUris] = useState<string[]>([]);
   const [imageMediaIds, setImageMediaIds] = useState<Array<string | null>>([]);
   const photoIdentityByUri = useRef(new Map<string, string>());
   const editingSnapshot = useRef<EditorSnapshot | null>(null);
-  const loadCirclesInFlightRef = useRef(false);
-  const loadTodayInFlightRef = useRef(false);
-  const submitInFlightRef = useRef(false);
   const [draftClientEntryId, setDraftClientEntryId] = useState<string | null>(
     null,
   );
@@ -124,60 +130,14 @@ export default function WriteScreen() {
   const [localDate, setLocalDate] = useState(getLocalDate);
   const currentDraftKey = user ? draftKey(user.id, localDate) : null;
 
-  const loadCircles = useCallback(async () => {
-    if (!session?.accessToken) return;
-    if (loadCirclesInFlightRef.current) return;
-    loadCirclesInFlightRef.current = true;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const result = await bloomApi.listCircles(session.accessToken);
-      setCircles(result);
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error ? loadError.message : t("circleLoadFailed"),
-      );
-    } finally {
-      loadCirclesInFlightRef.current = false;
-      setIsLoading(false);
-    }
-  }, [session?.accessToken, t]);
-
-  const loadTodayStatus = useCallback(async () => {
-    if (!session?.accessToken) return;
-    if (loadTodayInFlightRef.current) return;
-    loadTodayInFlightRef.current = true;
-    setIsTodayStatusLoading(true);
-    try {
-      setTodayStatus(await bloomApi.getTodayEntry(session.accessToken));
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : t("todayStatusLoadFailed"),
-      );
-    } finally {
-      loadTodayInFlightRef.current = false;
-      setIsTodayStatusLoading(false);
-    }
-  }, [session?.accessToken, t]);
-
+  const isLoading = circlesQuery.isPending;
+  const isTodayStatusLoading = todayQuery.isPending;
+  const isRefreshing = (circlesQuery.isRefetching || todayQuery.isRefetching) && !isLoading && !isTodayStatusLoading;
+  const queryError = circlesQuery.error ?? todayQuery.error;
   const refresh = useCallback(async () => {
-    if (!session?.accessToken || isRefreshing) return;
-    setIsRefreshing(true);
-    try {
-      await Promise.all([loadCircles(), loadTodayStatus()]);
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [isRefreshing, loadCircles, loadTodayStatus, session?.accessToken]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadCircles();
-      void loadTodayStatus();
-    }, [loadCircles, loadTodayStatus]),
-  );
+    setError(null);
+    await Promise.all([circlesQuery.refetch(), todayQuery.refetch()]);
+  }, [circlesQuery, todayQuery]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -185,13 +145,10 @@ export default function WriteScreen() {
       const nextLocalDate = getLocalDate();
       if (nextLocalDate !== localDate) {
         setLocalDate(nextLocalDate);
-        setTodayStatus(null);
       }
-      void loadTodayStatus();
-      void loadCircles();
     });
     return () => subscription.remove();
-  }, [loadCircles, loadTodayStatus, localDate]);
+  }, [localDate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -250,6 +207,45 @@ export default function WriteScreen() {
     t,
   ]);
 
+  const saveMutation = useMutation({
+    mutationFn: async (input: { request: UpdateTodayEntryRequest & { circleIds: string[]; retainedMediaIds: string[] }; imageUris: string[] }) => {
+      if (!session?.accessToken) throw new Error(t("todayStatusLoadFailed"));
+      return bloomApi.updateTodayEntryWithMedia(session.accessToken, input.request, input.imageUris);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.todayEntry });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.circles });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.home });
+    },
+  });
+  const submitMutation = useMutation({
+    mutationFn: async (input: { request: EntrySubmissionRequest; imageUris: string[] }) => {
+      if (!session?.accessToken) throw new Error(t("todayStatusLoadFailed"));
+      return input.imageUris.length > 0
+        ? bloomApi.submitEntryWithMedia(session.accessToken, input.request, input.imageUris)
+        : bloomApi.submitEntry(session.accessToken, input.request);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.todayEntry });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.circles });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.home });
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!session?.accessToken) throw new Error(t("todayStatusLoadFailed"));
+      return bloomApi.deleteTodayEntry(session.accessToken);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.todayEntry });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.circles });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.stats });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.home });
+    },
+  });
+
   const editableCircles = useMemo(
     () => isEditingToday
       ? circles.filter((circle) => circle.status === "Sealed" || selectedCircleIds.includes(circle.id))
@@ -268,7 +264,9 @@ export default function WriteScreen() {
     editableCircles.every((circle) => selectedCircleIds.includes(circle.id));
   const canSubmit =
     Boolean(session?.accessToken) &&
-    !isSubmitting &&
+    !saveMutation.isPending &&
+    !submitMutation.isPending &&
+    !deleteMutation.isPending &&
     !isTodayStatusLoading &&
     Boolean(text.trim()) &&
     selectedAvailableCircleIds.length > 0 &&
@@ -364,36 +362,25 @@ export default function WriteScreen() {
       {
         text: t("deleteToday"),
         style: "destructive",
-        onPress: () =>
-          void (async () => {
-            try {
-              setIsSubmitting(true);
-              await bloomApi.deleteTodayEntry(session.accessToken);
+        onPress: () => {
+          setError(null);
+          deleteMutation.mutate(undefined, {
+            onSuccess: async () => {
               editingSnapshot.current = null;
               setIsEditingToday(false);
               await clearEditor();
-              await loadTodayStatus();
               setNotice(t("todayDeleted"));
-            } catch (deleteError) {
-              setError(
-                deleteError instanceof Error
-                  ? deleteError.message
-                  : t("todayStatusLoadFailed"),
-              );
-            } finally {
-              setIsSubmitting(false);
-            }
-          })(),
+            },
+            onError: (deleteError) => setError(deleteError instanceof Error ? deleteError.message : t("todayStatusLoadFailed")),
+          });
+        },
       },
     ]);
-  }, [clearEditor, loadTodayStatus, session?.accessToken, t, todayStatus]);
+  }, [clearEditor, deleteMutation, t, todayStatus]);
 
-  const submit = useCallback(async () => {
-    if (!session?.accessToken) return;
-    if (submitInFlightRef.current) return;
-    submitInFlightRef.current = true;
-    if (isTodayStatusLoading || (todayStatus?.hasEntry && !isEditingToday))
-      return;
+  const submit = useCallback(() => {
+    if (!session?.accessToken || submitMutation.isPending || saveMutation.isPending) return;
+    if (isTodayStatusLoading || (todayStatus?.hasEntry && !isEditingToday)) return;
     if (!text.trim()) {
       setError(t("writeBeforeSealing"));
       return;
@@ -403,25 +390,29 @@ export default function WriteScreen() {
       return;
     }
 
-    setIsSubmitting(true);
     setError(null);
     setNotice(null);
-    try {
-      if (isEditingToday) {
-        await bloomApi.updateTodayEntryWithMedia(session.accessToken, {
+    if (isEditingToday) {
+      saveMutation.mutate({
+        request: {
           text: text.trim(),
           mood,
           promptKey,
           circleIds: selectedAvailableCircleIds,
           retainedMediaIds: imageMediaIds.filter((id): id is string => Boolean(id)),
-        }, imageUris.filter((_, index) => !imageMediaIds[index]));
-        editingSnapshot.current = null;
-        setIsEditingToday(false);
-        await clearEditor();
-        await loadTodayStatus();
-        setNotice(t("todayUpdated"));
-      } else {
-        const submission = {
+        },
+        imageUris: imageUris.filter((_, index) => !imageMediaIds[index]),
+      }, {
+        onSuccess: async () => {
+          editingSnapshot.current = null;
+          setIsEditingToday(false);
+          await clearEditor();
+          setNotice(t("todayUpdated"));
+        },
+        onError: (saveError) => setError(saveError instanceof Error ? saveError.message : t("diarySealFailed")),
+      });
+    } else {
+      const submission: EntrySubmissionRequest = {
           clientEntryId: draftClientEntryId ?? createClientEntryId(),
           authorLocalDate: localDate,
           authorTimeZoneId: getDeviceTimeZone(),
@@ -429,39 +420,24 @@ export default function WriteScreen() {
           mood,
           promptKey,
           circleIds: selectedAvailableCircleIds,
-        };
-        if (imageUris.length > 0)
-          await bloomApi.submitEntryWithMedia(
-            session.accessToken,
-            submission,
-            imageUris,
-          );
-        else await bloomApi.submitEntry(session.accessToken, submission);
-        await clearEditor();
-        await loadTodayStatus();
-        setNotice(t("diarySealed"));
-      }
-    } catch (submitError) {
-      if (
-        submitError instanceof Error &&
-        submitError.message.includes("(409)")
-      ) {
-        await loadTodayStatus();
-        setIsEditingToday(false);
-        setNotice(t("todayAlreadySealed"));
-      } else {
-        setError(
-          submitError instanceof Error
-            ? submitError.message
-            : t("diarySealFailed"),
-        );
-      }
-    } finally {
-      submitInFlightRef.current = false;
-      setIsSubmitting(false);
+      };
+      submitMutation.mutate({ request: submission, imageUris }, {
+        onSuccess: async () => {
+          await clearEditor();
+          setNotice(t("diarySealed"));
+        },
+        onError: (submitError) => {
+          if (submitError instanceof Error && submitError.message.includes("(409)")) {
+            void todayQuery.refetch();
+            setIsEditingToday(false);
+            setNotice(t("todayAlreadySealed"));
+          } else {
+            setError(submitError instanceof Error ? submitError.message : t("diarySealFailed"));
+          }
+        },
+      });
     }
   }, [
-    currentDraftKey,
     clearEditor,
     draftClientEntryId,
     imageUris,
@@ -474,7 +450,9 @@ export default function WriteScreen() {
     text,
     isTodayStatusLoading,
     isEditingToday,
-    loadTodayStatus,
+    saveMutation,
+    submitMutation,
+    todayQuery,
     todayStatus?.hasEntry,
     t,
   ]);
@@ -539,8 +517,14 @@ export default function WriteScreen() {
       <Text style={styles.title}>{t("writeHonestly")}</Text>
       <Text style={styles.subtitle}>{t("diaryPrivate")}</Text>
 
-      {error ? (
-        <InlineAlert message={error} onDismiss={() => setError(null)} />
+      {error || queryError ? (
+        <InlineAlert
+          message={error ?? (queryError instanceof Error ? queryError.message : t("todayStatusLoadFailed"))}
+          onDismiss={() => {
+            setError(null);
+            void refresh();
+          }}
+        />
       ) : null}
       {notice ? (
         <InlineAlert
@@ -812,7 +796,7 @@ export default function WriteScreen() {
               !canSubmit ? styles.submitDisabled : null,
             ]}
           >
-            {isSubmitting ? (
+            {saveMutation.isPending || submitMutation.isPending ? (
               <ActivityIndicator color={colors.card} />
             ) : (
               <Text style={styles.submitText}>

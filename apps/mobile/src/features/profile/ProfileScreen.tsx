@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import DateTimePicker, {
   type DateTimePickerChangeEvent,
 } from "@react-native-community/datetimepicker";
@@ -17,7 +18,6 @@ import { Screen } from "@/components/Screen";
 import { BottomSheet } from "@/components/BottomSheet";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
-import type { UserStatsResponse } from "@/types/api";
 import { colors } from "@/styles/tokens";
 import { profileStyles as styles } from "@/styles/screens/profile.styles";
 import { useSettings } from "@/settings/SettingsProvider";
@@ -25,6 +25,7 @@ import { getDeviceTimeZone } from "@/utils/device";
 import { formatLocalTime } from "@/utils/date";
 import { InlineAlert } from "@/components/InlineAlert";
 import { Avatar } from "@/components/Avatar";
+import { queryKeys } from "@/query/queryKeys";
 
 export default function ProfileScreen() {
   const { session, updateUser, user, signOut } = useAuth();
@@ -40,16 +41,34 @@ export default function ProfileScreen() {
   } = useSettings();
   const deviceTimeZone = useMemo(() => getDeviceTimeZone(), []);
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
-  const [stats, setStats] = useState<UserStatsResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const queryClient = useQueryClient();
+  const statsQuery = useQuery({
+    queryKey: queryKeys.stats,
+    queryFn: () => bloomApi.stats(session!.accessToken),
+    enabled: Boolean(session?.accessToken),
+  });
+  const isLoading = statsQuery.isPending;
+  const isRefreshing = statsQuery.isFetching && !statsQuery.isPending;
+  const stats = statsQuery.data;
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const loadInFlightRef = useRef(false);
-  const saveInFlightRef = useRef(false);
-  const deleteAccountInFlightRef = useRef(false);
+  const saveMutation = useMutation({
+    mutationFn: (name: string) => bloomApi.updateProfile(
+      session!.accessToken,
+      name,
+      getDeviceTimeZone(),
+    ),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.me }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+      ]);
+    },
+  });
+  const deleteAccountMutation = useMutation({
+    mutationFn: () => bloomApi.deleteAccount(session!.accessToken),
+  });
   const [sheet, setSheet] = useState<
     "profile" | "language" | "reminder" | null
   >(null);
@@ -81,48 +100,19 @@ export default function ProfileScreen() {
     if (sheet !== "reminder") setShowReminderPicker(false);
   }, [sheet]);
 
-  const loadStats = useCallback(
-    async (refresh = false) => {
-      if (!session?.accessToken) return;
-      if (loadInFlightRef.current) return;
-      loadInFlightRef.current = true;
-      refresh ? setIsRefreshing(true) : setIsLoading(true);
-      setError(null);
-      try {
-        setStats(await bloomApi.stats(session.accessToken));
-      } catch (loadError) {
-        setError(
-          loadError instanceof Error ? loadError.message : t("statsLoadFailed"),
-        );
-      } finally {
-        loadInFlightRef.current = false;
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
-    },
-    [session?.accessToken, t],
-  );
-
-  useEffect(() => {
-    void loadStats();
-  }, [loadStats]);
+  const loadStats = useCallback(async () => {
+    await statsQuery.refetch();
+  }, [statsQuery]);
   useEffect(() => {
     setDisplayName(user?.displayName ?? "");
   }, [user?.displayName]);
 
   const save = useCallback(async () => {
     if (!session?.accessToken) return;
-    if (saveInFlightRef.current) return;
-    saveInFlightRef.current = true;
-    setIsSaving(true);
     setError(null);
     setNotice(null);
     try {
-      const updatedUser = await bloomApi.updateProfile(
-        session.accessToken,
-        displayName.trim(),
-        getDeviceTimeZone(),
-      );
+      const updatedUser = await saveMutation.mutateAsync(displayName.trim());
       updateUser(updatedUser);
       setDisplayName(updatedUser.displayName);
       setNotice(t("profileSaved"));
@@ -131,11 +121,8 @@ export default function ProfileScreen() {
       setError(
         saveError instanceof Error ? saveError.message : t("profileSaveFailed"),
       );
-    } finally {
-      saveInFlightRef.current = false;
-      setIsSaving(false);
     }
-  }, [displayName, session?.accessToken, t, updateUser]);
+  }, [displayName, saveMutation, session?.accessToken, t, updateUser]);
 
   const deleteAccount = useCallback(() => {
     if (!session?.accessToken) return;
@@ -146,26 +133,23 @@ export default function ProfileScreen() {
         style: "destructive",
         onPress: () =>
           void (async () => {
-            if (deleteAccountInFlightRef.current) return;
-            deleteAccountInFlightRef.current = true;
-            setIsDeletingAccount(true);
             setError(null);
             try {
-              await bloomApi.deleteAccount(session.accessToken);
+              setIsDeletingAccount(true);
+              await deleteAccountMutation.mutateAsync();
               await signOut();
             } catch (deleteError) {
               setError(deleteError instanceof Error ? deleteError.message : t("requestFailed"));
             } finally {
-              deleteAccountInFlightRef.current = false;
               setIsDeletingAccount(false);
             }
           })(),
       },
     ]);
-  }, [language, session?.accessToken, signOut, t]);
+  }, [deleteAccountMutation, language, session?.accessToken, signOut, t]);
 
   return (
-    <Screen onRefresh={() => void loadStats(true)} refreshing={isRefreshing}>
+    <Screen onRefresh={() => void loadStats()} refreshing={isRefreshing}>
       <View style={styles.profileHead}>
         <Avatar
           accessibilityLabel={user?.displayName ?? t("yourProfile")}
@@ -316,11 +300,11 @@ export default function ProfileScreen() {
                 />
                 <Pressable
                   accessibilityRole="button"
-                  disabled={isSaving}
+                  disabled={saveMutation.isPending}
                   onPress={() => void save()}
                   style={styles.save}
                 >
-                  {isSaving ? (
+                  {saveMutation.isPending ? (
                     <ActivityIndicator color={colors.card} />
                   ) : (
                     <Text style={styles.saveText}>{t("saveProfile")}</Text>

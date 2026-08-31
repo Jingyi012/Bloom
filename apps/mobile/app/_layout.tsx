@@ -12,6 +12,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '@/styles/tokens';
 import { AuthProvider } from '@/auth/AuthProvider';
 import { SettingsProvider } from '@/settings/SettingsProvider';
+import { QueryProvider } from '@/query/QueryProvider';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -31,12 +32,14 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StatusBar backgroundColor={colors.background} barStyle="dark-content" />
       <SettingsProvider>
-        <AuthProvider>
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(tabs)" />
-          </Stack>
-        </AuthProvider>
+        <QueryProvider>
+          <AuthProvider>
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="(tabs)" />
+            </Stack>
+          </AuthProvider>
+        </QueryProvider>
       </SettingsProvider>
     </SafeAreaProvider>
   );

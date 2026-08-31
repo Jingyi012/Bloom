@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import {
   ActivityIndicator,
@@ -17,24 +18,27 @@ import { BottomSheet } from "@/components/BottomSheet";
 import { Avatar } from "@/components/Avatar";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
-import type { CircleDetail } from "@/types/api";
 import { colors } from "@/styles/tokens";
 import { circleDetailStyles as styles } from "@/styles/screens/circle-detail.styles";
 import { InlineAlert } from "@/components/InlineAlert";
 import { useSettings } from "@/settings/SettingsProvider";
 import { formatLocalDate, formatLocalDateTime, formatLocalTime } from "@/utils/date";
 import { CIRCLE_EMOJIS } from "@/features/circles/circleEmojis";
+import { queryKeys } from "@/query/queryKeys";
 
 export default function CircleDetailScreen() {
   const { circleId } = useLocalSearchParams<{ circleId: string }>();
   const router = useRouter();
   const { session } = useAuth();
   const { t } = useSettings();
-  const [detail, setDetail] = useState<CircleDetail | null>(null);
+  const queryClient = useQueryClient();
+  const detailQuery = useQuery({
+    queryKey: queryKeys.circle(circleId ?? ""),
+    queryFn: () => bloomApi.getCircle(session!.accessToken, circleId!),
+    enabled: Boolean(session?.accessToken && circleId),
+  });
+  const detail = detailQuery.data ?? null;
   const [email, setEmail] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [showEditSheet, setShowEditSheet] = useState(false);
@@ -42,43 +46,49 @@ export default function CircleDetailScreen() {
   const [editEmoji, setEditEmoji] = useState("");
   const [editBloomAt, setEditBloomAt] = useState(new Date());
   const [editPickerMode, setEditPickerMode] = useState<"date" | "time" | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [showDeleteSheet, setShowDeleteSheet] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
-  const [isDeleting, setIsDeleting] = useState(false);
-  const loadInFlightRef = useRef(false);
-  const saveInFlightRef = useRef(false);
-  const deleteInFlightRef = useRef(false);
-  const inviteInFlightRef = useRef(false);
-  const leaveInFlightRef = useRef(false);
-
-  const load = useCallback(
-    async (refresh = false) => {
-      if (!session?.accessToken || !circleId) return;
-      if (loadInFlightRef.current) return;
-      loadInFlightRef.current = true;
-      refresh ? setIsRefreshing(true) : setIsLoading(true);
-      setError(null);
-      try {
-        setDetail(await bloomApi.getCircle(session.accessToken, circleId));
-      } catch (loadError) {
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : t("circleLoadDetailFailed"),
-        );
-      } finally {
-        loadInFlightRef.current = false;
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
+  const updateMutation = useMutation({
+    mutationFn: (request: Parameters<typeof bloomApi.updateCircle>[2]) =>
+      bloomApi.updateCircle(session!.accessToken, circleId!, request),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.circle(circleId!) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.circles }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+      ]);
     },
-    [circleId, session?.accessToken, t],
-  );
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  });
+  const deleteMutation = useMutation({
+    mutationFn: () => bloomApi.deleteCircle(session!.accessToken, circleId!),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.circles }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+      ]);
+    },
+  });
+  const inviteMutation = useMutation({
+    mutationFn: (inviteeEmail: string) => bloomApi.inviteToCircle(session!.accessToken, circleId!, inviteeEmail),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.circle(circleId!) });
+    },
+  });
+  const leaveMutation = useMutation({
+    mutationFn: () => bloomApi.leaveCircle(session!.accessToken, circleId!),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.circles }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+      ]);
+    },
+  });
+  const isLoading = detailQuery.isPending;
+  const isRefreshing = detailQuery.isFetching && !detailQuery.isPending;
+  const isBusy = inviteMutation.isPending || leaveMutation.isPending;
+  const load = useCallback(async () => {
+    await detailQuery.refetch();
+  }, [detailQuery]);
 
   const openEditSheet = useCallback(() => {
     if (!detail || detail.circle.status === "Bloomed") return;
@@ -91,28 +101,22 @@ export default function CircleDetailScreen() {
 
   const saveCircle = useCallback(async () => {
     if (!session?.accessToken || !circleId || !detail || !editName.trim()) return;
-    if (saveInFlightRef.current) return;
-    saveInFlightRef.current = true;
-    setIsSaving(true);
+    if (updateMutation.isPending) return;
     setError(null);
     setNotice(null);
     try {
-      const updated = await bloomApi.updateCircle(session.accessToken, circleId, {
+      await updateMutation.mutateAsync({
         name: editName.trim(),
         emoji: editEmoji.trim(),
         bloomAtUtc: editBloomAt.toISOString(),
         timeZoneId: detail.circle.timeZoneId,
       });
-      setDetail(updated);
       setShowEditSheet(false);
       setNotice(t("circleSaved"));
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : t("circleSaveFailed"));
-    } finally {
-      saveInFlightRef.current = false;
-      setIsSaving(false);
     }
-  }, [circleId, detail, editBloomAt, editEmoji, editName, session?.accessToken, t]);
+  }, [circleId, detail, editBloomAt, editEmoji, editName, session?.accessToken, t, updateMutation]);
 
   const handleEditPickerValueChange = useCallback(
     (_event: DateTimePickerChangeEvent, selected: Date) => {
@@ -130,21 +134,16 @@ export default function CircleDetailScreen() {
 
   const confirmDelete = useCallback(async () => {
     if (!session?.accessToken || !circleId || !detail || deleteConfirmation.trim() !== detail.circle.name.trim()) return;
-    if (deleteInFlightRef.current) return;
-    deleteInFlightRef.current = true;
-    setIsDeleting(true);
+    if (deleteMutation.isPending) return;
     setError(null);
     try {
-      await bloomApi.deleteCircle(session.accessToken, circleId);
+      await deleteMutation.mutateAsync();
       setShowDeleteSheet(false);
       router.back();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : t("circleSaveFailed"));
-    } finally {
-      deleteInFlightRef.current = false;
-      setIsDeleting(false);
     }
-  }, [circleId, deleteConfirmation, detail, router, session?.accessToken, t]);
+  }, [circleId, deleteConfirmation, deleteMutation, detail, router, session?.accessToken, t]);
 
   const progress = useMemo(() => {
     if (!detail) return 0;
@@ -160,17 +159,11 @@ export default function CircleDetailScreen() {
 
   const invite = useCallback(async () => {
     if (!session?.accessToken || !circleId || !email.trim()) return;
-    if (inviteInFlightRef.current) return;
-    inviteInFlightRef.current = true;
-    setIsBusy(true);
+    if (inviteMutation.isPending) return;
     setError(null);
     setNotice(null);
     try {
-      await bloomApi.inviteToCircle(
-        session.accessToken,
-        circleId,
-        email.trim(),
-      );
+      await inviteMutation.mutateAsync(email.trim());
       setEmail("");
       setNotice(t("invitationSent"));
       await load();
@@ -178,11 +171,8 @@ export default function CircleDetailScreen() {
       setError(
         inviteError instanceof Error ? inviteError.message : t("inviteFailed"),
       );
-    } finally {
-      inviteInFlightRef.current = false;
-      setIsBusy(false);
     }
-  }, [circleId, email, load, session?.accessToken, t]);
+  }, [circleId, email, inviteMutation, load, session?.accessToken, t]);
 
   const leave = useCallback(() => {
     if (!session?.accessToken || !circleId) return;
@@ -193,11 +183,9 @@ export default function CircleDetailScreen() {
         style: "destructive",
         onPress: () =>
           void (async () => {
-            if (leaveInFlightRef.current) return;
-            leaveInFlightRef.current = true;
-            setIsBusy(true);
+            if (leaveMutation.isPending) return;
             try {
-              await bloomApi.leaveCircle(session.accessToken, circleId);
+              await leaveMutation.mutateAsync();
               router.back();
             } catch (leaveError) {
               setError(
@@ -205,14 +193,11 @@ export default function CircleDetailScreen() {
                   ? leaveError.message
                   : t("leaveFailed"),
               );
-            } finally {
-              leaveInFlightRef.current = false;
-              setIsBusy(false);
             }
           })(),
       },
     ]);
-  }, [circleId, router, session?.accessToken, t]);
+  }, [circleId, leaveMutation, router, session?.accessToken, t]);
 
   if (isLoading)
     return (
@@ -224,7 +209,7 @@ export default function CircleDetailScreen() {
     );
   if (!detail)
     return (
-      <Screen onRefresh={() => void load(true)} refreshing={isRefreshing}>
+      <Screen onRefresh={() => void load()} refreshing={isRefreshing}>
         <View style={styles.topBar}>
           <Pressable
             accessibilityRole="button"
@@ -237,15 +222,15 @@ export default function CircleDetailScreen() {
           </Pressable>
         </View>
         <InlineAlert
-          message={error ?? t("circleNotFound")}
-          onDismiss={() => setError(null)}
+          message={error ?? (detailQuery.error instanceof Error ? detailQuery.error.message : t("circleNotFound"))}
+          onDismiss={() => void load()}
         />
       </Screen>
     );
 
   const { circle, members } = detail;
   return (
-    <Screen onRefresh={() => void load(true)} refreshing={isRefreshing}>
+    <Screen onRefresh={() => void load()} refreshing={isRefreshing}>
       <View style={styles.topBar}>
         <Pressable
           accessibilityRole="button"
@@ -376,7 +361,7 @@ export default function CircleDetailScreen() {
         </Pressable>
       ) : null}
       {circle.isCreator && circle.status !== "Bloomed" ? (
-        <Pressable accessibilityRole="button" disabled={isBusy || isDeleting} onPress={openDeleteSheet} style={styles.danger}>
+        <Pressable accessibilityRole="button" disabled={isBusy || deleteMutation.isPending} onPress={openDeleteSheet} style={styles.danger}>
           <Text style={styles.dangerText}>{t("deleteCircle")}</Text>
         </Pressable>
       ) : null}
@@ -428,8 +413,8 @@ export default function CircleDetailScreen() {
                 {Platform.OS === "ios" ? <Pressable accessibilityRole="button" onPress={() => setEditPickerMode(null)} style={styles.pickerDone}><Text style={styles.pickerDoneText}>{t("done")}</Text></Pressable> : null}
               </View>
             ) : null}
-            <Pressable accessibilityRole="button" disabled={isSaving || !editName.trim()} onPress={() => void saveCircle()} style={[styles.saveButton, isSaving ? styles.saveButtonDisabled : null]}>
-              {isSaving ? <ActivityIndicator color={colors.card} /> : <Text style={styles.saveButtonText}>{t("saveCircle")}</Text>}
+            <Pressable accessibilityRole="button" disabled={updateMutation.isPending || !editName.trim()} onPress={() => void saveCircle()} style={[styles.saveButton, updateMutation.isPending ? styles.saveButtonDisabled : null]}>
+              {updateMutation.isPending ? <ActivityIndicator color={colors.card} /> : <Text style={styles.saveButtonText}>{t("saveCircle")}</Text>}
             </Pressable>
         </ScrollView>
       </BottomSheet>
@@ -450,8 +435,8 @@ export default function CircleDetailScreen() {
             <Text style={styles.confirmBody}>{t("deleteCircleBody")}</Text>
             <Text style={styles.label}>{t("deleteCircleConfirmName")}</Text>
             <TextInput autoCapitalize="none" onChangeText={setDeleteConfirmation} placeholder={circle.name} placeholderTextColor={colors.inkSoft} style={styles.input} value={deleteConfirmation} />
-            <Pressable accessibilityRole="button" disabled={isDeleting || deleteConfirmation.trim() !== circle.name.trim()} onPress={() => void confirmDelete()} style={[styles.deleteButton, isDeleting || deleteConfirmation.trim() !== circle.name.trim() ? styles.saveButtonDisabled : null]}>
-              {isDeleting ? <ActivityIndicator color={colors.card} /> : <Text style={styles.deleteButtonText}>{t("deleteCircle")}</Text>}
+            <Pressable accessibilityRole="button" disabled={deleteMutation.isPending || deleteConfirmation.trim() !== circle.name.trim()} onPress={() => void confirmDelete()} style={[styles.deleteButton, deleteMutation.isPending || deleteConfirmation.trim() !== circle.name.trim() ? styles.saveButtonDisabled : null]}>
+              {deleteMutation.isPending ? <ActivityIndicator color={colors.card} /> : <Text style={styles.deleteButtonText}>{t("deleteCircle")}</Text>}
             </Pressable>
         </ScrollView>
       </BottomSheet>
