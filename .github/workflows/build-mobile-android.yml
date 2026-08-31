@@ -3,16 +3,6 @@ name: Build Bloom Android APK
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: "Release version, for example 0.1.1"
-        required: true
-        default: "0.1.0"
-        type: string
-      prerelease:
-        description: "Mark this release as a prerelease"
-        required: true
-        default: false
-        type: boolean
       target_env:
         description: "GitHub Environment containing the mobile build secrets"
         required: true
@@ -25,15 +15,21 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: build-bloom-android-${{ inputs.target_env }}
+  cancel-in-progress: false
+
 jobs:
   build-apk:
-    name: Build preview APK
+    name: Build ${{ inputs.target_env }} APK
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     environment: ${{ inputs.target_env }}
     defaults:
       run:
         working-directory: apps/mobile
     env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_PUBLIC_API_URL: ${{ secrets.BLOOM_MOBILE_API_URL }}
       EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.BLOOM_GOOGLE_IOS_CLIENT_ID }}
       EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.BLOOM_GOOGLE_ANDROID_CLIENT_ID }}
@@ -53,22 +49,25 @@ jobs:
       - name: Validate build secrets
         shell: bash
         run: |
-          test -n "${{ secrets.EXPO_TOKEN }}" || { echo "EXPO_TOKEN is required"; exit 1; }
+          test -n "$EXPO_TOKEN" || { echo "EXPO_TOKEN is required"; exit 1; }
           test -n "$EXPO_PUBLIC_API_URL" || { echo "BLOOM_MOBILE_API_URL is required"; exit 1; }
           test -n "$EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID" || { echo "BLOOM_GOOGLE_ANDROID_CLIENT_ID is required"; exit 1; }
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci
 
-      - name: Install EAS CLI
-        run: |
-          npm install --global eas-cli@22.2.0
-          eas --version
+      - name: Type-check mobile app
+        run: npm run typecheck
+
+      - name: Set up Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: 22.2.0
+          token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Sync mobile variables to EAS
         shell: bash
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_TARGET_ENV: ${{ inputs.target_env }}
         run: |
           if [[ "$EAS_TARGET_ENV" == "prod" ]]; then
@@ -98,8 +97,6 @@ jobs:
 
       - name: Build APK with EAS
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          BLOOM_APP_VERSION: ${{ inputs.version }}
           EAS_TARGET_ENV: ${{ inputs.target_env }}
         run: |
           if [[ "$EAS_TARGET_ENV" == "prod" ]]; then
@@ -114,38 +111,63 @@ jobs:
             exit 1
           fi
 
-      - name: Download APK
+      - name: Resolve build metadata
         shell: bash
         env:
-          RELEASE_VERSION: ${{ inputs.version }}
+          TARGET_ENV: ${{ inputs.target_env }}
         run: |
-          if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Version must use semantic version format, for example 0.1.1"
-            exit 1
-          fi
-          node -e '
+          node <<'NODE'
             const fs = require("fs");
             const payload = JSON.parse(fs.readFileSync("eas-build.json", "utf8"));
             const build = Array.isArray(payload) ? payload[0] : payload;
             const url = build?.artifacts?.buildUrl;
             if (!url) throw new Error("EAS did not return an APK URL");
-            fs.writeFileSync("apk-url.txt", url);
-          '
-          curl --fail --location --retry 3 "$(cat apk-url.txt)" --output "bloom-${RELEASE_VERSION}.apk"
+            const appVersion = String(build?.appVersion || "");
+            const appBuildVersion = String(build?.appBuildVersion || "");
+            if (!/^\d+\.\d+\.\d+([.-][0-9A-Za-z.-]+)?$/.test(appVersion)) {
+              throw new Error(`EAS returned an invalid app version: ${appVersion || "<empty>"}`);
+            }
+            if (!/^\d+$/.test(appBuildVersion)) {
+              throw new Error(`EAS returned an invalid Android build version: ${appBuildVersion || "<empty>"}`);
+            }
+            const targetEnv = process.env.TARGET_ENV;
+            const releaseTag = `mobile-${targetEnv}-v${appVersion}-build.${appBuildVersion}`;
+            const apkFile = `bloom-${targetEnv}-v${appVersion}-build.${appBuildVersion}.apk`;
+            const values = {
+              APP_VERSION: appVersion,
+              APP_BUILD_VERSION: appBuildVersion,
+              EAS_BUILD_ID: String(build.id || ""),
+              APK_URL: url,
+              APK_FILE: apkFile,
+              RELEASE_TAG: releaseTag,
+            };
+            fs.appendFileSync(process.env.GITHUB_ENV, Object.entries(values)
+              .map(([key, value]) => `${key}=${value}\n`).join(""));
+          NODE
+
+      - name: Download APK
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 "$APK_URL" --output "$APK_FILE"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bloom-${{ inputs.version }}-apk
-          path: apps/mobile/bloom-${{ inputs.version }}.apk
+          name: bloom-${{ inputs.target_env }}-v${{ env.APP_VERSION }}-build-${{ env.APP_BUILD_VERSION }}-apk
+          path: apps/mobile/${{ env.APK_FILE }}
           if-no-files-found: error
           retention-days: 14
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ inputs.version }}
-          name: Bloom v${{ inputs.version }}
-          prerelease: ${{ inputs.prerelease }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Bloom Android v${{ env.APP_VERSION }} (${{ inputs.target_env }} build ${{ env.APP_BUILD_VERSION }})
+          prerelease: ${{ inputs.target_env != 'prod' }}
           generate_release_notes: true
-          files: apps/mobile/bloom-${{ inputs.version }}.apk
+          files: apps/mobile/${{ env.APK_FILE }}
+          body: |
+            Environment: `${{ inputs.target_env }}`
+            App version: `${{ env.APP_VERSION }}`
+            Android version code: `${{ env.APP_BUILD_VERSION }}`
+            EAS build ID: `${{ env.EAS_BUILD_ID }}`

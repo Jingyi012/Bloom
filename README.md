@@ -173,9 +173,13 @@ dotnet build Bloom.slnx --no-restore
 dotnet test Bloom.slnx --no-build --no-restore
 ```
 
-The manually triggered Android workflow is
-`.github/workflows/build-mobile-android.yml`. It uses EAS and creates an APK
-artifact plus a GitHub Release. Configure the selected GitHub Environment with:
+Mobile changes are checked automatically by `.github/workflows/verify-mobile.yml`
+on pull requests and pushes to `main`. It runs TypeScript validation and an
+Android JavaScript bundle export without consuming an EAS build.
+
+The manually triggered `.github/workflows/build-mobile-android.yml` workflow
+uses EAS to create an APK artifact and a GitHub Release. Configure the selected
+GitHub Environment with:
 
 - `EXPO_TOKEN`
 - `BLOOM_MOBILE_API_URL`
@@ -183,8 +187,12 @@ artifact plus a GitHub Release. Configure the selected GitHub Environment with:
 - `BLOOM_GOOGLE_IOS_CLIENT_ID` (when needed)
 - `BLOOM_GOOGLE_WEB_CLIENT_ID` (when needed)
 
-The workflow supports `uat` preview builds and `prod` production APK builds,
-including optional prerelease GitHub Releases.
+The workflow only asks for `uat` or `prod`; no version input is required.
+`app.json` supplies the user-facing app version and EAS remotely increments the
+Android `versionCode` for every build. GitHub Release tags and APK filenames are
+generated from both values, for example `mobile-uat-v0.1.0-build.12`. UAT releases
+are automatically marked as prereleases, while production releases are marked
+as full releases.
 
 ## Backend deployment
 
