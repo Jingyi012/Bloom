@@ -121,6 +121,17 @@ export type TodayEntryStatus = {
   modificationEndsAtUtc: string | null;
 };
 
+export type DiaryCalendarDay = {
+  date: string;
+  circleCount: number;
+};
+
+export type DiaryCalendarResponse = {
+  from: string;
+  to: string;
+  days: DiaryCalendarDay[];
+};
+
 export type UpdateTodayEntryRequest = {
   text: string;
   mood?: string;

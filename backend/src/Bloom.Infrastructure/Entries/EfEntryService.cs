@@ -62,6 +62,31 @@ public sealed class EfEntryService(
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<DiaryCalendarDay>> GetCalendarAsync(
+        Guid userId,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken)
+    {
+        if (from > to) throw new ArgumentException("The calendar start date must be on or before the end date.", nameof(from));
+        if (to.DayNumber - from.DayNumber > 366)
+            throw new ArgumentException("The calendar range cannot exceed 367 days.", nameof(to));
+
+        return await _db.DiaryEntries.AsNoTracking()
+            .Where(entry => entry.AuthorUserId == userId
+                && entry.AuthorLocalDate >= from
+                && entry.AuthorLocalDate <= to
+                && entry.DeletedAtUtc == null)
+            .OrderBy(entry => entry.AuthorLocalDate)
+            .Select(entry => new DiaryCalendarDay(
+                entry.AuthorLocalDate,
+                _db.EntryPublications.Count(publication =>
+                    publication.DiaryEntryId == entry.Id && publication.DeletedAtUtc == null)))
+            .ToArrayAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
     public async Task<TodayEntryStatus> UpdateTodayAsync(Guid userId, string text, string? mood, string? promptKey, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);

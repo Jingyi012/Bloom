@@ -41,6 +41,7 @@ export default function CircleDetailScreen() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showArchivedNotice, setShowArchivedNotice] = useState(true);
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [editName, setEditName] = useState("");
   const [editEmoji, setEditEmoji] = useState("");
@@ -64,7 +65,9 @@ export default function CircleDetailScreen() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.circles }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.archivedCircles }),
         queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats }),
       ]);
     },
   });
@@ -80,6 +83,7 @@ export default function CircleDetailScreen() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.circles }),
         queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats }),
       ]);
     },
   });
@@ -91,7 +95,7 @@ export default function CircleDetailScreen() {
   }, [detailQuery]);
 
   const openEditSheet = useCallback(() => {
-    if (!detail || detail.circle.status === "Bloomed") return;
+    if (!detail || detail.circle.status !== "Sealed") return;
     setEditName(detail.circle.name);
     setEditEmoji(CIRCLE_EMOJIS.includes(detail.circle.emoji as (typeof CIRCLE_EMOJIS)[number]) ? detail.circle.emoji : CIRCLE_EMOJIS[0]);
     setEditBloomAt(new Date(detail.circle.bloomAtUtc));
@@ -127,7 +131,7 @@ export default function CircleDetailScreen() {
   );
 
   const openDeleteSheet = useCallback(() => {
-    if (!detail || !detail.circle.isCreator || detail.circle.status === "Bloomed") return;
+    if (!detail || !detail.circle.isCreator || detail.circle.status !== "Sealed") return;
     setDeleteConfirmation("");
     setShowDeleteSheet(true);
   }, [detail]);
@@ -242,7 +246,7 @@ export default function CircleDetailScreen() {
           <MaterialCommunityIcons color={colors.ink} name="arrow-left" size={19} />
         </Pressable>
         <Text numberOfLines={1} style={styles.topBarTitle}>{circle.name}</Text>
-        {circle.isCreator && circle.status !== "Bloomed" ? (
+        {circle.isCreator && circle.status === "Sealed" ? (
           <Pressable accessibilityRole="button" accessibilityLabel={t("editCircle")} hitSlop={8} onPress={openEditSheet} style={styles.topBarAction}>
             <MaterialCommunityIcons color={colors.sageDark} name="pencil-outline" size={19} />
           </Pressable>
@@ -252,28 +256,42 @@ export default function CircleDetailScreen() {
         <Text style={styles.emoji}>{circle.emoji}</Text>
         <Text style={styles.title}>{circle.name}</Text>
         <Text style={styles.status}>
-          {circle.status === "Bloomed" ? t("bloomedStatus") : t("sealedStatus")}
+          {circle.status === "Bloomed"
+            ? t("bloomedStatus")
+            : circle.status === "Archived"
+              ? t("archivedStatus")
+              : t("sealedStatus")}
         </Text>
-        <Text style={styles.bloomDate}>{circle.status === "Bloomed" ? t("sharedTimelineReady") : t("circleBlooms")}</Text>
+        <Text style={styles.bloomDate}>
+          {circle.status === "Bloomed"
+            ? t("sharedTimelineReady")
+            : circle.status === "Archived"
+              ? t("scheduledBloom")
+              : t("circleBlooms")}
+        </Text>
         <Text style={styles.bloomDateValue}>{formatLocalDateTime(circle.bloomAtUtc)}</Text>
         <View style={styles.heroMeta}>
           <Text style={styles.heroMetaText}>{members.length} {members.length === 1 ? t("member") : t("memberPlural")}</Text>
           <Text style={styles.heroMetaDot}>·</Text>
           <Text style={styles.heroMetaText}>{t("circleTimezone")}: {circle.timeZoneId}</Text>
         </View>
-        <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${Math.round(progress * 100)}%` },
-            ]}
-          />
-        </View>
-        <Text style={styles.progressLabel}>
-          {circle.status === "Bloomed"
-            ? t("fullyBloomed")
-            : `${Math.round(progress * 100)}% ${t("throughSeason")}`}
-        </Text>
+        {circle.status !== "Archived" ? (
+          <>
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${Math.round(progress * 100)}%` },
+                ]}
+              />
+            </View>
+            <Text style={styles.progressLabel}>
+              {circle.status === "Bloomed"
+                ? t("fullyBloomed")
+                : `${Math.round(progress * 100)}% ${t("throughSeason")}`}
+            </Text>
+          </>
+        ) : null}
       </View>
       {error ? (
         <InlineAlert message={error} onDismiss={() => setError(null)} />
@@ -284,6 +302,9 @@ export default function CircleDetailScreen() {
           onDismiss={() => setNotice(null)}
           variant="success"
         />
+      ) : null}
+      {circle.status === "Archived" && showArchivedNotice ? (
+        <InlineAlert message={t("archivedReadOnly")} onDismiss={() => setShowArchivedNotice(false)} variant="success" />
       ) : null}
       <Text style={styles.section}>
         {t("members")} · {members.length}
@@ -307,7 +328,7 @@ export default function CircleDetailScreen() {
           </View>
         </View>
       ))}
-      {circle.isCreator && circle.status !== "Bloomed" ? (
+      {circle.isCreator && circle.status === "Sealed" ? (
         <View style={styles.form}>
           <TextInput
             accessibilityLabel={t("inviteeEmail")}
@@ -360,7 +381,7 @@ export default function CircleDetailScreen() {
           <Text style={styles.dangerText}>{t("leaveCircle")}</Text>
         </Pressable>
       ) : null}
-      {circle.isCreator && circle.status !== "Bloomed" ? (
+      {circle.isCreator && circle.status === "Sealed" ? (
         <Pressable accessibilityRole="button" disabled={isBusy || deleteMutation.isPending} onPress={openDeleteSheet} style={styles.danger}>
           <Text style={styles.dangerText}>{t("deleteCircle")}</Text>
         </Pressable>

@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { useRouter, type Href } from "expo-router";
 import { Screen } from "@/components/Screen";
 import { BottomSheet } from "@/components/BottomSheet";
 import { useAuth } from "@/auth/AuthProvider";
@@ -28,6 +29,7 @@ import { Avatar } from "@/components/Avatar";
 import { queryKeys } from "@/query/queryKeys";
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { session, updateUser, user, signOut } = useAuth();
   const {
     language,
@@ -242,6 +244,34 @@ export default function ProfileScreen() {
                 ? `${t("on")} · ${formatLocalTime(reminderDate)}`
                 : t("off")}
             </Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/calendar" as Href)}
+          style={styles.settingRow}
+        >
+          <View style={styles.settingIcon}>
+            <MaterialCommunityIcons color={colors.sageDark} name="calendar-month-outline" size={20} />
+          </View>
+          <View style={styles.settingCopy}>
+            <Text style={styles.settingTitle}>{t("diaryCalendar")}</Text>
+            <Text style={styles.hint}>{t("diaryCalendarSubtitle")}</Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/archived-circles" as Href)}
+          style={styles.settingRow}
+        >
+          <View style={styles.settingIcon}>
+            <MaterialCommunityIcons color={colors.coralDark} name="archive-outline" size={20} />
+          </View>
+          <View style={styles.settingCopy}>
+            <Text style={styles.settingTitle}>{t("archivedCircles")}</Text>
+            <Text style={styles.hint}>{t("archivedCirclesSubtitle")}</Text>
           </View>
           <Text style={styles.chevron}>›</Text>
         </Pressable>

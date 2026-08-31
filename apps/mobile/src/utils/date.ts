@@ -51,6 +51,21 @@ export function formatLocalDateTime(value: string | Date): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: localTimeZone() }).format(toDate(value));
 }
 
+/** Formats a month heading using the app language and device-local calendar. */
+export function formatLocalMonthYear(value: Date, language: "en" | "zh"): string {
+  return new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en-MY", {
+    month: "long",
+    year: "numeric",
+    timeZone: localTimeZone(),
+  }).format(value);
+}
+
+/** Device-local abbreviated weekday labels, beginning on Sunday. */
+export function getLocalWeekdayLabels(language: "en" | "zh"): string[] {
+  const formatter = new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en-MY", { weekday: "narrow" });
+  return Array.from({ length: 7 }, (_, index) => formatter.format(new Date(2024, 0, 7 + index, 12)));
+}
+
 /** Formats comment timestamps as a localized relative label, then a local date/time. */
 export function formatLocalCommentTime(value: string | Date, language: "en" | "zh"): string {
   const createdAt = toDate(value).getTime();

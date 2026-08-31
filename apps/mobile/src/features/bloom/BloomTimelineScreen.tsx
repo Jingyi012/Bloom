@@ -12,6 +12,7 @@ import {
   ScrollView,
   Text,
   View,
+  type ImageURISource,
 } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -24,6 +25,7 @@ import { colors } from "@/styles/tokens";
 import { bloomStyles as styles } from "@/styles/screens/bloom.styles";
 import { InlineAlert } from "@/components/InlineAlert";
 import { Avatar } from "@/components/Avatar";
+import { PhotoViewer } from "@/components/PhotoViewer";
 import { useSettings } from "@/settings/SettingsProvider";
 import {
   REACTION_OPTIONS,
@@ -608,7 +610,14 @@ const TimelineCard = memo(function TimelineCard({
 }) {
   const { t } = useSettings();
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const suppressNextReactionPress = useRef(false);
+  const photoSources = useMemo<ImageURISource[]>(() => accessToken
+    ? entry.mediaIds.map((mediaId) => ({
+        headers: { Authorization: `Bearer ${accessToken}` },
+        uri: bloomApi.mediaUrl(mediaId),
+      }))
+    : [], [accessToken, entry.mediaIds]);
   const reaction = entry.reactions.find(
     (item) => item.emojiCode === REACTION_OPTIONS[0].code,
   );
@@ -660,16 +669,15 @@ const TimelineCard = memo(function TimelineCard({
           style={styles.mediaGallery}
         >
           {entry.mediaIds.map((mediaId, index) => (
-            <Image
-              key={mediaId}
+            <Pressable
               accessibilityLabel={`${t("diaryPhoto")} ${index + 1} ${t("of")} ${entry.mediaIds.length}`}
-              contentFit="cover"
-              source={{
-                uri: bloomApi.mediaUrl(mediaId),
-                headers: { Authorization: `Bearer ${accessToken}` },
-              }}
-              style={styles.media}
-            />
+              accessibilityRole="button"
+              key={mediaId}
+              onPress={() => setViewerIndex(index)}
+              style={styles.mediaButton}
+            >
+              <Image contentFit="cover" source={photoSources[index]} style={styles.media} />
+            </Pressable>
           ))}
         </ScrollView>
       ) : null}
@@ -730,6 +738,12 @@ const TimelineCard = memo(function TimelineCard({
           </Text>
         </Pressable>
       </View>
+      <PhotoViewer
+        initialIndex={viewerIndex ?? 0}
+        onClose={() => setViewerIndex(null)}
+        sources={photoSources}
+        visible={viewerIndex !== null}
+      />
     </View>
   );
 });

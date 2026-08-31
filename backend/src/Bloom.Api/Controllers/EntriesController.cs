@@ -20,6 +20,32 @@ public sealed class EntriesController(IEntryService entryService, IOptions<Image
         ? imageStorageOptions.Value.MaxBytes
         : throw new ArgumentException("Image storage size limit must be configured.", nameof(imageStorageOptions));
 
+    /// <summary>Gets diary-writing dates for the requested calendar range.</summary>
+    [HttpGet("calendar")]
+    [ProducesResponseType(typeof(DiaryCalendarResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<DiaryCalendarResponse>> GetCalendarAsync(
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        if (from is null || to is null) return BadRequest("Both from and to dates are required.");
+        try
+        {
+            var days = await _entryService.GetCalendarAsync(userId, from.Value, to.Value, cancellationToken).ConfigureAwait(false);
+            return Ok(new DiaryCalendarResponse(
+                from.Value,
+                to.Value,
+                days.Select(day => new DiaryCalendarDayResponse(day.Date, day.CircleCount)).ToArray()));
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+    }
+
     /// <summary>Gets the current user's sealed-entry status for today.</summary>
     [HttpGet("today")]
     [ProducesResponseType(typeof(TodayEntryResponse), StatusCodes.Status200OK)]

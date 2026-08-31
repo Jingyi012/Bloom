@@ -21,6 +21,7 @@ import type {
   RefreshSessionResponse,
   UserStatsResponse,
   TimelineEntry,
+  DiaryCalendarResponse,
 } from "@/types/api";
 
 const apiUrl =
@@ -182,6 +183,10 @@ export const bloomApi = {
     requestJson<CircleSummary[]>("/circles", {
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
+  listArchivedCircles: (accessToken: string) =>
+    requestJson<CircleSummary[]>("/circles/archived", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
   createCircle: (accessToken: string, request: CreateCircleRequest) =>
     requestJson<CircleDetail>("/circles", {
       method: "POST",
@@ -239,6 +244,11 @@ export const bloomApi = {
     requestJson<TodayEntryStatus>("/entries/today", {
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
+  getDiaryCalendar: (accessToken: string, from: string, to: string) =>
+    requestJson<DiaryCalendarResponse>(
+      `/entries/calendar?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    ),
   updateTodayEntry: (accessToken: string, request: UpdateTodayEntryRequest) =>
     requestJson<TodayEntryStatus>("/entries/today", {
       method: "PATCH",

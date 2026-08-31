@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   View,
+  type ImageURISource,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
@@ -32,6 +33,7 @@ import { InlineAlert } from "@/components/InlineAlert";
 import { getDeviceTimeZone } from "@/utils/device";
 import { formatLocalDateTime } from "@/utils/date";
 import { queryKeys } from "@/query/queryKeys";
+import { PhotoViewer } from "@/components/PhotoViewer";
 
 const MOODS = [
   { key: "heavy", emoji: "😢" },
@@ -120,6 +122,13 @@ export default function WriteScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [imageUris, setImageUris] = useState<string[]>([]);
   const [imageMediaIds, setImageMediaIds] = useState<Array<string | null>>([]);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const photoSources = useMemo<ImageURISource[]>(() => imageUris.map((uri, index) => ({
+    headers: imageMediaIds[index] && session?.accessToken
+      ? { Authorization: `Bearer ${session.accessToken}` }
+      : undefined,
+    uri,
+  })), [imageMediaIds, imageUris, session?.accessToken]);
   const photoIdentityByUri = useRef(new Map<string, string>());
   const editingSnapshot = useRef<EditorSnapshot | null>(null);
   const [draftClientEntryId, setDraftClientEntryId] = useState<string | null>(
@@ -661,7 +670,7 @@ export default function WriteScreen() {
           >
             <Text style={styles.photoButtonText}>
               {imageUris.length > 0
-                ? `Add more photos (${imageUris.length}/10)`
+                ? `${t("addMorePhotos")} (${imageUris.length}/10)`
                 : t("attachPhoto")}
             </Text>
           </Pressable>
@@ -673,14 +682,14 @@ export default function WriteScreen() {
             >
               {imageUris.map((uri, index) => (
                 <View key={`${uri}-${index}`} style={styles.photoTile}>
-                  <Image
+                  <Pressable
                     accessibilityLabel={`${t("selectedDiaryPhoto")} ${index + 1}`}
-                    contentFit="cover"
-                    source={imageMediaIds[index]
-                      ? { uri, headers: session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : undefined }
-                      : uri}
+                    accessibilityRole="button"
+                    onPress={() => setViewerIndex(index)}
                     style={styles.photoPreview}
-                  />
+                  >
+                    <Image contentFit="cover" source={photoSources[index]} style={styles.photoPreviewImage} />
+                  </Pressable>
                   <Pressable
                     accessibilityLabel={`${t("removePhoto")} ${index + 1}`}
                     onPress={() => removeImage(uri)}
@@ -807,6 +816,12 @@ export default function WriteScreen() {
           </Pressable>
         </>
       )}
+      <PhotoViewer
+        initialIndex={viewerIndex ?? 0}
+        onClose={() => setViewerIndex(null)}
+        sources={photoSources}
+        visible={viewerIndex !== null}
+      />
     </Screen>
   );
 }

@@ -78,6 +78,7 @@ export default function CirclesScreen() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.circles }),
         queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats }),
       ]);
     },
   });
@@ -89,6 +90,7 @@ export default function CirclesScreen() {
         queryClient.invalidateQueries({ queryKey: queryKeys.invitations }),
         queryClient.invalidateQueries({ queryKey: queryKeys.circles }),
         queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats }),
       ]);
     },
   });

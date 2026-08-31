@@ -110,9 +110,25 @@ public sealed class EfCircleService(
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<Circle>> ListArchivedForUserAsync(Guid userId, CancellationToken cancellationToken) =>
+        await _db.Circles.AsNoTracking()
+            .Include(circle => circle.Members)
+            .Where(circle => circle.Status == CircleStatus.Archived
+                && circle.Members.Any(member => member.UserId == userId && member.LeftAtUtc == null))
+            .OrderByDescending(circle => circle.LastModifiedAtUtc)
+            .ToArrayAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+    /// <inheritdoc />
     public Task<Circle?> GetForUserAsync(Guid circleId, Guid userId, CancellationToken cancellationToken) =>
         _db.Circles.Include(circle => circle.Members)
             .SingleOrDefaultAsync(circle => circle.Id == circleId && circle.Status != CircleStatus.Archived && circle.Members.Any(member => member.UserId == userId && member.LeftAtUtc == null), cancellationToken);
+
+    /// <inheritdoc />
+    public Task<Circle?> GetVisibleForUserAsync(Guid circleId, Guid userId, CancellationToken cancellationToken) =>
+        _db.Circles.AsNoTracking().Include(circle => circle.Members)
+            .SingleOrDefaultAsync(circle => circle.Id == circleId
+                && circle.Members.Any(member => member.UserId == userId && member.LeftAtUtc == null), cancellationToken);
 
     /// <inheritdoc />
     public Task<Circle?> GetByIdAsync(Guid circleId, CancellationToken cancellationToken) =>

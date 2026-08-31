@@ -1,0 +1,32 @@
+import { StyleSheet } from "react-native";
+import { colors, shadows, spacing, typography } from "@/styles/tokens";
+
+export const diaryCalendarStyles = StyleSheet.create({
+  topBar: { alignItems: "center", flexDirection: "row", minHeight: 44 },
+  backButton: { alignItems: "center", backgroundColor: colors.card, borderColor: colors.line, borderRadius: 18, borderWidth: 1, height: 36, justifyContent: "center", width: 36 },
+  topBarTitle: { color: colors.ink, flex: 1, fontFamily: typography.display, fontSize: 22, textAlign: "center" },
+  todayButton: { alignItems: "center", backgroundColor: colors.sageLight, borderRadius: 14, minWidth: 52, paddingHorizontal: spacing.sm, paddingVertical: 8 },
+  todayButtonText: { color: colors.sageDark, fontFamily: typography.uiBold, fontSize: 11 },
+  subtitle: { color: colors.inkSoft, fontFamily: typography.ui, fontSize: 13, lineHeight: 20, marginBottom: spacing.lg, marginTop: spacing.sm, textAlign: "center" },
+  calendarCard: { ...shadows.card, backgroundColor: colors.card, borderColor: colors.line, borderRadius: 22, borderWidth: 1, padding: spacing.md },
+  monthRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.md },
+  monthButton: { alignItems: "center", borderRadius: 18, height: 36, justifyContent: "center", width: 36 },
+  monthTitle: { color: colors.ink, fontFamily: typography.display, fontSize: 19 },
+  weekRow: { flexDirection: "row", marginBottom: spacing.xs },
+  weekLabel: { color: colors.inkSoft, flex: 1, fontFamily: typography.uiBold, fontSize: 10, textAlign: "center" },
+  grid: { flexDirection: "row", flexWrap: "wrap" },
+  dayCell: { alignItems: "center", aspectRatio: 1, borderRadius: 18, justifyContent: "center", width: "14.2857%" },
+  dayCellSelected: { backgroundColor: colors.coral },
+  dayNumber: { color: colors.ink, fontFamily: typography.uiMedium, fontSize: 13 },
+  dayNumberToday: { color: colors.coralDark, fontFamily: typography.uiBold },
+  dayNumberSelected: { color: colors.card, fontFamily: typography.uiBold },
+  dayDot: { backgroundColor: colors.sageDark, borderRadius: 3, height: 5, marginTop: 3, width: 5 },
+  dayDotSelected: { backgroundColor: colors.card },
+  loading: { alignItems: "center", height: 250, justifyContent: "center" },
+  selectionCard: { alignItems: "center", backgroundColor: colors.cardWarm, borderColor: colors.line, borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: spacing.md, marginTop: spacing.lg, padding: spacing.lg },
+  selectionIcon: { alignItems: "center", backgroundColor: colors.card, borderRadius: 20, height: 40, justifyContent: "center", width: 40 },
+  selectionIconWritten: { backgroundColor: colors.sageLight },
+  selectionCopy: { flex: 1 },
+  selectionDate: { color: colors.ink, fontFamily: typography.uiBold, fontSize: 14 },
+  selectionBody: { color: colors.inkSoft, fontFamily: typography.ui, fontSize: 12, lineHeight: 18, marginTop: 3 },
+});

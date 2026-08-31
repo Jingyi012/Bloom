@@ -17,8 +17,14 @@ public interface ICircleService
     /// <summary>Lists circles in which the user is an active member.</summary>
     Task<IReadOnlyList<Circle>> ListForUserAsync(Guid userId, CancellationToken cancellationToken);
 
+    /// <summary>Lists archived circles in which the user was an active member when the circle was archived.</summary>
+    Task<IReadOnlyList<Circle>> ListArchivedForUserAsync(Guid userId, CancellationToken cancellationToken);
+
     /// <summary>Gets a circle when the user is an active member.</summary>
     Task<Circle?> GetForUserAsync(Guid circleId, Guid userId, CancellationToken cancellationToken);
+
+    /// <summary>Gets an active or archived circle visible to the user.</summary>
+    Task<Circle?> GetVisibleForUserAsync(Guid circleId, Guid userId, CancellationToken cancellationToken);
 
     /// <summary>Gets a circle by identifier for invitation previews.</summary>
     Task<Circle?> GetByIdAsync(Guid circleId, CancellationToken cancellationToken);

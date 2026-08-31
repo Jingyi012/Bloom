@@ -30,6 +30,15 @@ public sealed class CirclesController(
         return Ok(circles.Select(circle => ToSummary(circle, userId)).ToArray());
     }
 
+    /// <summary>Lists archived circles that remain visible to the current user.</summary>
+    [HttpGet("archived")]
+    public async Task<ActionResult<IReadOnlyList<CircleSummaryResponse>>> ListArchivedAsync(CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        var circles = await _circleService.ListArchivedForUserAsync(userId, cancellationToken).ConfigureAwait(false);
+        return Ok(circles.Select(circle => ToSummary(circle, userId)).ToArray());
+    }
+
     /// <summary>Plants a new sealed circle.</summary>
     [HttpPost]
     public async Task<ActionResult<CircleDetailResponse>> CreateAsync(CreateCircleRequest request, CancellationToken cancellationToken)
@@ -66,7 +75,7 @@ public sealed class CirclesController(
     public async Task<ActionResult<CircleDetailResponse>> GetAsync(Guid circleId, CancellationToken cancellationToken)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
-        var circle = await _circleService.GetForUserAsync(circleId, userId, cancellationToken).ConfigureAwait(false);
+        var circle = await _circleService.GetVisibleForUserAsync(circleId, userId, cancellationToken).ConfigureAwait(false);
         return circle is null ? NotFound() : Ok(await ToDetailAsync(circle, userId, cancellationToken).ConfigureAwait(false));
     }
 
@@ -198,7 +207,7 @@ public sealed class CirclesController(
             circle.TimeZoneId,
             circle.Members.Count(member => member.LeftAtUtc is null),
             circle.CreatorUserId == userId,
-            member?.Role != CircleMemberRole.Creator && currentStatus != CircleStatus.Bloomed);
+            member?.Role != CircleMemberRole.Creator && currentStatus == CircleStatus.Sealed);
     }
 
     private async Task<CircleDetailResponse> ToDetailAsync(Circle circle, Guid userId, CancellationToken cancellationToken)

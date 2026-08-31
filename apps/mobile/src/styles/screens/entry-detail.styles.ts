@@ -76,7 +76,8 @@ export const entryDetailStyles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   mediaGallery: { marginTop: spacing.lg },
-  media: { borderRadius: 16, height: 220, marginRight: spacing.sm, width: 320 },
+  mediaButton: { borderRadius: 16, height: 220, marginRight: spacing.sm, overflow: "hidden", width: 320 },
+  media: { height: "100%", width: "100%" },
   reactions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
   reaction: {
     alignItems: "center",
@@ -162,6 +163,8 @@ export const entryDetailStyles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   commentMeta: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: spacing.sm },
+  commentMetaActions: { alignItems: "center", flexDirection: "row", gap: spacing.xs },
+  commentDelete: { alignItems: "center", borderRadius: 12, height: 24, justifyContent: "center", width: 24 },
   commentAuthor: {
     color: colors.ink,
     fontFamily: typography.uiBold,

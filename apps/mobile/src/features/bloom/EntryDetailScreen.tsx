@@ -1,7 +1,7 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View, type ImageURISource } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +17,7 @@ import { useSettings } from '@/settings/SettingsProvider';
 import { REACTION_OPTIONS, type ReactionCode } from '@/features/bloom/reactions';
 import { formatLocalCommentTime, formatLocalDate, formatLocalTime } from '@/utils/date';
 import { queryKeys } from '@/query/queryKeys';
+import { PhotoViewer } from '@/components/PhotoViewer';
 
 export default function EntryDetailScreen() {
   const { publicationId: rawPublicationId } = useLocalSearchParams<{ publicationId?: string | string[] }>();
@@ -42,6 +43,15 @@ export default function EntryDetailScreen() {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const suppressNextReactionPress = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const photoSources = useMemo<ImageURISource[]>(() => {
+    if (!entry || !session?.accessToken) return [];
+    return entry.mediaIds.map((mediaId) => ({
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+      uri: bloomApi.mediaUrl(mediaId),
+    }));
+  }, [entry, session?.accessToken]);
 
   const isLoading = entryQuery.isPending;
   const isRefreshing = (entryQuery.isRefetching || commentsQuery.isRefetching) && !isLoading;
@@ -112,6 +122,33 @@ export default function EntryDetailScreen() {
 
   const posting = commentMutation.isPending;
 
+  const deleteCommentMutation = useMutation({
+    mutationFn: async (commentId: string) => {
+      if (!session?.accessToken) throw new Error(t('commentDeleteFailed'));
+      await bloomApi.deleteComment(session.accessToken, commentId);
+      return commentId;
+    },
+    onSuccess: (commentId) => {
+      if (!publicationId) return;
+      queryClient.setQueryData(queryKeys.comments(publicationId), (current: { items: ApiComment[]; nextCursor?: string | null } | undefined) => current
+        ? { ...current, items: current.items.filter((comment) => comment.id !== commentId) }
+        : current);
+      queryClient.setQueryData<TimelineEntry>(queryKeys.entry(publicationId), (currentEntry) => currentEntry
+        ? { ...currentEntry, commentCount: Math.max(0, currentEntry.commentCount - 1) }
+        : currentEntry);
+      void queryClient.invalidateQueries({ queryKey: ['timeline'] });
+      setNotice(t('commentDeleted'));
+    },
+    onError: (deleteError) => setError(deleteError instanceof Error ? deleteError.message : t('commentDeleteFailed')),
+  });
+
+  const confirmDeleteComment = useCallback((commentId: string) => {
+    Alert.alert(t('deleteCommentTitle'), t('deleteCommentBody'), [
+      { text: t('cancel'), style: 'cancel' },
+      { text: t('deleteComment'), style: 'destructive', onPress: () => deleteCommentMutation.mutate(commentId) },
+    ]);
+  }, [deleteCommentMutation, t]);
+
   if (isLoading) {
     return (
       <Screen bottomPadding={0} scroll={false}>
@@ -153,6 +190,7 @@ export default function EntryDetailScreen() {
               onDismiss={() => setError(null)}
             />
           ) : null}
+          {notice ? <InlineAlert message={notice} onDismiss={() => setNotice(null)} variant="success" /> : null}
           {!entry ? (
             <InlineAlert message={t('entryLoadFailed')} onDismiss={() => setError(null)} />
           ) : (
@@ -187,13 +225,15 @@ export default function EntryDetailScreen() {
                     style={styles.mediaGallery}
                   >
                     {entry.mediaIds.map((mediaId, index) => (
-                      <Image
-                        key={mediaId}
+                      <Pressable
                         accessibilityLabel={`${t('diaryPhoto')} ${index + 1} ${t('of')} ${entry.mediaIds.length}`}
-                        contentFit="cover"
-                        source={{ uri: bloomApi.mediaUrl(mediaId), headers: { Authorization: `Bearer ${session.accessToken}` } }}
-                        style={styles.media}
-                      />
+                        accessibilityRole="button"
+                        key={mediaId}
+                        onPress={() => setViewerIndex(index)}
+                        style={styles.mediaButton}
+                      >
+                        <Image contentFit="cover" source={photoSources[index]} style={styles.media} />
+                      </Pressable>
                     ))}
                   </ScrollView>
                 ) : null}
@@ -251,7 +291,21 @@ export default function EntryDetailScreen() {
                     <View style={styles.commentBubble}>
                       <View style={styles.commentMeta}>
                         <Text style={styles.commentAuthor}>{comment.authorDisplayName}</Text>
-                        <Text style={styles.commentTime}>{formatLocalCommentTime(comment.createdAtUtc, language)}</Text>
+                        <View style={styles.commentMetaActions}>
+                          <Text style={styles.commentTime}>{formatLocalCommentTime(comment.createdAtUtc, language)}</Text>
+                          {comment.isMine ? (
+                            <Pressable
+                              accessibilityLabel={t('deleteComment')}
+                              accessibilityRole="button"
+                              disabled={deleteCommentMutation.isPending}
+                              hitSlop={8}
+                              onPress={() => confirmDeleteComment(comment.id)}
+                              style={styles.commentDelete}
+                            >
+                              <MaterialCommunityIcons color={colors.inkSoft} name="trash-can-outline" size={15} />
+                            </Pressable>
+                          ) : null}
+                        </View>
                       </View>
                       <Text style={styles.commentBody}>{comment.body}</Text>
                     </View>
@@ -290,6 +344,12 @@ export default function EntryDetailScreen() {
           </View>
         ) : null}
       </KeyboardAvoidingView>
+      <PhotoViewer
+        initialIndex={viewerIndex ?? 0}
+        onClose={() => setViewerIndex(null)}
+        sources={photoSources}
+        visible={viewerIndex !== null}
+      />
     </Screen>
   );
 }

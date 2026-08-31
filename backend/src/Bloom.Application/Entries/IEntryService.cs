@@ -9,6 +9,13 @@ public interface IEntryService
     /// <summary>Gets the current user's sealed-entry status for today.</summary>
     Task<TodayEntryStatus> GetTodayStatusAsync(Guid userId, CancellationToken cancellationToken);
 
+    /// <summary>Gets dates on which the current user sealed diaries in a bounded range.</summary>
+    Task<IReadOnlyList<DiaryCalendarDay>> GetCalendarAsync(
+        Guid userId,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken);
+
     /// <summary>Updates the current user's diary while today's edit window is open.</summary>
     Task<TodayEntryStatus> UpdateTodayAsync(Guid userId, string text, string? mood, string? promptKey, CancellationToken cancellationToken);
 
@@ -94,6 +101,9 @@ public sealed record TodayEntryStatus(
     string? PromptKey,
     bool CanModify,
     DateTimeOffset? ModificationEndsAtUtc);
+
+/// <summary>Safe calendar metadata for one sealed diary day.</summary>
+public sealed record DiaryCalendarDay(DateOnly Date, int CircleCount);
 
 /// <summary>One safe, post-bloom timeline item.</summary>
 public sealed record TimelineEntry(

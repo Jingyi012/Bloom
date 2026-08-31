@@ -32,6 +32,15 @@ public sealed record TodayEntryResponse(
     bool CanModify,
     DateTimeOffset? ModificationEndsAtUtc);
 
+/// <summary>One date on which the current user sealed a diary.</summary>
+public sealed record DiaryCalendarDayResponse(DateOnly Date, int CircleCount);
+
+/// <summary>A bounded calendar range containing only dates with diary entries.</summary>
+public sealed record DiaryCalendarResponse(
+    DateOnly From,
+    DateOnly To,
+    IReadOnlyList<DiaryCalendarDayResponse> Days);
+
 /// <summary>Request to update the current user's diary during today's edit window.</summary>
 public sealed record UpdateTodayEntryRequest(string Text, string? Mood, string? PromptKey);
 
