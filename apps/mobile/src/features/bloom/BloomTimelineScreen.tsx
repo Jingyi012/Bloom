@@ -767,13 +767,19 @@ function formatTime(value: string): string {
 }
 
 function moodEmoji(mood: string): string {
-  return (
-    {
-      heavy: "😢",
-      restless: "😐",
-      calm: "🙂",
-      joyful: "😄",
-      radiant: "🤩",
-    }[mood] ?? mood
-  );
+  const emojis: Record<string, string> = {
+    heavy: "😢",
+    restless: "😐",
+    calm: "😌",
+    joyful: "😄",
+    radiant: "🤩",
+    angry: "😡",
+    anxious: "😰",
+    tired: "😴",
+    grateful: "🙏",
+    loved: "🥰",
+    focused: "🤔",
+    frustrated: "😤",
+  };
+  return mood.split("|").map((value) => emojis[value] ?? value).join(" ");
 }

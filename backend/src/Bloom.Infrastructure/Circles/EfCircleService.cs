@@ -95,11 +95,51 @@ public sealed class EfCircleService(
     }
 
     /// <inheritdoc />
+    public async Task<bool> ArchiveAsync(Guid circleId, Guid userId, CancellationToken cancellationToken)
+    {
+        var circle = await GetForUserAsync(circleId, userId, cancellationToken).ConfigureAwait(false);
+        if (circle is null) return false;
+        var now = _timeProvider.GetUtcNow();
+        if (circle.GetCurrentStatus(now) != CircleStatus.Bloomed)
+            throw new InvalidOperationException("Only a bloomed circle can be archived.");
+        var member = circle.FindMember(userId) ?? throw new InvalidOperationException("The user is not a member of this circle.");
+        circle.ArchiveForMember(userId, now);
+        _auditStampWriter.StampModified(member, userId);
+        await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> UnarchiveAsync(Guid circleId, Guid userId, CancellationToken cancellationToken)
+    {
+        // This operation must load a tracked aggregate. GetVisibleForUserAsync
+        // intentionally uses AsNoTracking for read-only detail screens, which
+        // would otherwise make the cleared ArchivedAtUtc value disappear on
+        // SaveChangesAsync.
+        var circle = await _db.Circles
+            .Include(candidate => candidate.Members)
+            .SingleOrDefaultAsync(candidate => candidate.Id == circleId
+                && candidate.Status != CircleStatus.Archived
+                && candidate.Members.Any(member => member.UserId == userId && member.LeftAtUtc == null), cancellationToken)
+            .ConfigureAwait(false);
+        if (circle is null) return false;
+        var now = _timeProvider.GetUtcNow();
+        if (circle.GetCurrentStatus(now) != CircleStatus.Bloomed)
+            throw new InvalidOperationException("Only a bloomed circle can be restored.");
+        var member = circle.FindMember(userId);
+        if (member is null || member.LeftAtUtc is not null || member.ArchivedAtUtc is null) return false;
+        circle.RestoreForMember(userId);
+        _auditStampWriter.StampModified(member, userId);
+        await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<Circle>> ListForUserAsync(Guid userId, CancellationToken cancellationToken)
     {
         var circles = await _db.Circles
             .Include(circle => circle.Members)
-            .Where(circle => circle.Status != CircleStatus.Archived && circle.Members.Any(member => member.UserId == userId && member.LeftAtUtc == null))
+            .Where(circle => circle.Status != CircleStatus.Archived && circle.Members.Any(member => member.UserId == userId && member.LeftAtUtc == null && member.ArchivedAtUtc == null))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
         var now = _timeProvider.GetUtcNow();
@@ -110,19 +150,23 @@ public sealed class EfCircleService(
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<Circle>> ListArchivedForUserAsync(Guid userId, CancellationToken cancellationToken) =>
-        await _db.Circles.AsNoTracking()
+    public async Task<IReadOnlyList<Circle>> ListArchivedForUserAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var circles = await _db.Circles.AsNoTracking()
             .Include(circle => circle.Members)
-            .Where(circle => circle.Status == CircleStatus.Archived
-                && circle.Members.Any(member => member.UserId == userId && member.LeftAtUtc == null))
-            .OrderByDescending(circle => circle.LastModifiedAtUtc)
+            .Where(circle => circle.Members.Any(member => member.UserId == userId && member.LeftAtUtc == null
+                && (member.ArchivedAtUtc != null || circle.Status == CircleStatus.Archived)))
             .ToArrayAsync(cancellationToken)
             .ConfigureAwait(false);
+        return circles
+            .OrderByDescending(circle => circle.FindMember(userId)?.ArchivedAtUtc ?? circle.LastModifiedAtUtc)
+            .ToArray();
+    }
 
     /// <inheritdoc />
     public Task<Circle?> GetForUserAsync(Guid circleId, Guid userId, CancellationToken cancellationToken) =>
         _db.Circles.Include(circle => circle.Members)
-            .SingleOrDefaultAsync(circle => circle.Id == circleId && circle.Status != CircleStatus.Archived && circle.Members.Any(member => member.UserId == userId && member.LeftAtUtc == null), cancellationToken);
+            .SingleOrDefaultAsync(circle => circle.Id == circleId && circle.Status != CircleStatus.Archived && circle.Members.Any(member => member.UserId == userId && member.LeftAtUtc == null && member.ArchivedAtUtc == null), cancellationToken);
 
     /// <inheritdoc />
     public Task<Circle?> GetVisibleForUserAsync(Guid circleId, Guid userId, CancellationToken cancellationToken) =>
@@ -157,6 +201,7 @@ public sealed class EfCircleService(
         _auditStampWriter.StampCreated(invitation, inviterUserId);
         _db.CircleInvitations.Add(invitation);
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await _googleUserService.RecordFriendshipAsync(inviterUserId, invitee.Id, cancellationToken).ConfigureAwait(false);
         return invitation;
     }
 
@@ -184,6 +229,15 @@ public sealed class EfCircleService(
             var member = circle.AddMember(inviteeUserId, _timeProvider.GetUtcNow());
             _auditStampWriter.StampCreated(member, inviteeUserId);
             invitation.Accept();
+            // A circle creates a private friend history between the new member and
+            // every person already in the circle, not only the creator.
+            var existingMemberIds = circle.Members
+                .Where(candidate => candidate.UserId != inviteeUserId && candidate.LeftAtUtc == null)
+                .Select(candidate => candidate.UserId)
+                .Distinct()
+                .ToArray();
+            foreach (var existingMemberId in existingMemberIds)
+                await _googleUserService.RecordFriendshipAsync(inviteeUserId, existingMemberId, cancellationToken).ConfigureAwait(false);
         }
         else
         {
@@ -210,6 +264,32 @@ public sealed class EfCircleService(
         {
             publication.Withdraw();
             _auditStampWriter.StampModified(publication, userId);
+        }
+        await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> RemoveMemberAsync(Guid circleId, Guid creatorUserId, Guid memberUserId, CancellationToken cancellationToken)
+    {
+        var circle = await GetForUserAsync(circleId, creatorUserId, cancellationToken).ConfigureAwait(false);
+        if (circle is null) return false;
+        if (circle.CreatorUserId != creatorUserId)
+            throw new UnauthorizedAccessException("Only the circle creator can remove members.");
+        var now = _timeProvider.GetUtcNow();
+        if (circle.GetCurrentStatus(now) != CircleStatus.Sealed)
+            throw new InvalidOperationException("Members can only be removed before a circle blooms.");
+        circle.RemoveMember(creatorUserId, memberUserId, now);
+        var member = circle.FindMember(memberUserId)!;
+        _auditStampWriter.StampModified(member, creatorUserId);
+        var publications = await _db.EntryPublications
+            .Where(publication => publication.CircleId == circleId && publication.AuthorUserId == memberUserId && publication.Status == EntryPublicationStatus.Sealed)
+            .ToArrayAsync(cancellationToken)
+            .ConfigureAwait(false);
+        foreach (var publication in publications)
+        {
+            publication.Withdraw();
+            _auditStampWriter.StampModified(publication, creatorUserId);
         }
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return true;

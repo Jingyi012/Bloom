@@ -16,6 +16,8 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(entity => entity.EmailNormalized).HasMaxLength(320).IsRequired();
         builder.Property(entity => entity.DisplayName).HasMaxLength(200).IsRequired();
         builder.Property(entity => entity.GoogleAvatarUrl).HasMaxLength(2048);
+        builder.Property(entity => entity.AvatarPath).HasMaxLength(1024);
+        builder.Property(entity => entity.AvatarContentType).HasMaxLength(100);
         builder.Property(entity => entity.TimeZoneId).HasMaxLength(100).IsRequired();
         builder.HasIndex(entity => entity.GoogleSubject).IsUnique();
         builder.HasIndex(entity => entity.EmailNormalized).IsUnique();

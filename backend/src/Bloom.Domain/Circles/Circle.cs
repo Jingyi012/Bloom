@@ -94,6 +94,22 @@ public sealed class Circle : AuditableEntity
     /// <summary>Gets a member by user identifier.</summary>
     public CircleMember? FindMember(Guid userId) => _members.FirstOrDefault(member => member.UserId == userId);
 
+    /// <summary>Archives this circle only for one active member's personal view.</summary>
+    public void ArchiveForMember(Guid userId, DateTimeOffset archivedAtUtc)
+    {
+        var member = FindMember(userId) ?? throw new InvalidOperationException("The user is not a member of this circle.");
+        if (member.LeftAtUtc is not null) throw new InvalidOperationException("A departed member cannot archive this circle.");
+        member.Archive(archivedAtUtc);
+    }
+
+    /// <summary>Restores this circle to one member's active view.</summary>
+    public void RestoreForMember(Guid userId)
+    {
+        var member = FindMember(userId) ?? throw new InvalidOperationException("The user is not a member of this circle.");
+        if (member.LeftAtUtc is not null) throw new InvalidOperationException("A departed member cannot restore this circle.");
+        member.RestoreArchive();
+    }
+
     /// <summary>Adds a member to a sealed circle.</summary>
     public CircleMember AddMember(Guid userId, DateTimeOffset joinedAtUtc)
     {
@@ -110,6 +126,16 @@ public sealed class Circle : AuditableEntity
     {
         var member = FindMember(userId) ?? throw new InvalidOperationException("The user is not a member of this circle.");
         if (member.Role == CircleMemberRole.Creator) throw new InvalidOperationException("The circle creator cannot leave the circle yet.");
+        member.Leave(leftAtUtc);
+    }
+
+    /// <summary>Removes an active non-creator member at the creator's request.</summary>
+    public void RemoveMember(Guid creatorUserId, Guid memberUserId, DateTimeOffset leftAtUtc)
+    {
+        if (CreatorUserId != creatorUserId) throw new InvalidOperationException("Only the circle creator can remove members.");
+        if (creatorUserId == memberUserId) throw new InvalidOperationException("The circle creator cannot remove themselves.");
+        var member = FindMember(memberUserId) ?? throw new InvalidOperationException("The selected member was not found.");
+        if (member.LeftAtUtc is not null) throw new InvalidOperationException("The selected member has already left the circle.");
         member.Leave(leftAtUtc);
     }
 }

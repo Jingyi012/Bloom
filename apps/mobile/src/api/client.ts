@@ -22,12 +22,19 @@ import type {
   UserStatsResponse,
   TimelineEntry,
   DiaryCalendarResponse,
+  FriendSummary,
 } from "@/types/api";
 
 const apiUrl =
   (Constants.expoConfig?.extra?.apiUrl as string | undefined) ??
   process.env.EXPO_PUBLIC_API_URL ??
   "http://127.0.0.1:5052/api/v1";
+
+/** Resolves API-relative asset references while preserving configured subpaths. */
+export function resolveApiUrl(reference: string): string {
+  if (/^https?:\/\//i.test(reference)) return reference;
+  return `${apiUrl.replace(/\/+$/, "")}/${reference.replace(/^\/+/, "")}`;
+}
 
 const API_REQUEST_TIMEOUT_MS = 20_000;
 type SessionRefreshHandler = () => Promise<string | null>;
@@ -170,8 +177,21 @@ export const bloomApi = {
       body: JSON.stringify({ displayName, timeZoneId }),
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
+  uploadAvatar: (accessToken: string, uri: string, contentType = "image/jpeg") => {
+    const formData = new FormData();
+    formData.append("avatar", {
+      uri,
+      name: `avatar.${contentType.split("/")[1] ?? "jpg"}`,
+      type: contentType,
+    } as unknown as Blob);
+    return requestMultipart<CurrentUserResponse>("/me/avatar", formData, accessToken);
+  },
   stats: (accessToken: string) =>
     requestJson<UserStatsResponse>("/me/stats", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+  friends: (accessToken: string) =>
+    requestJson<FriendSummary[]>("/me/friends", {
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
   deleteAccount: (accessToken: string) =>
@@ -212,6 +232,16 @@ export const bloomApi = {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
+  archiveCircle: (accessToken: string, circleId: string) =>
+    requestJson<void>(`/circles/${circleId}/archive`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+  unarchiveCircle: (accessToken: string, circleId: string) =>
+    requestJson<void>(`/circles/${circleId}/archive`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
   listCircleInvitations: (accessToken: string) =>
     requestJson<CircleInvitation[]>("/circles/invitations", {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -238,6 +268,11 @@ export const bloomApi = {
   leaveCircle: (accessToken: string, circleId: string) =>
     requestJson<void>(`/circles/${circleId}/leave`, {
       method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+  removeCircleMember: (accessToken: string, circleId: string, memberUserId: string) =>
+    requestJson<void>(`/circles/${circleId}/members/${memberUserId}`, {
+      method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
   getTodayEntry: (accessToken: string) =>

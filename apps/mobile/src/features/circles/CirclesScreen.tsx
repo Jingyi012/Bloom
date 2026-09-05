@@ -70,6 +70,7 @@ export default function CirclesScreen() {
   const [emoji, setEmoji] = useState<string>(CIRCLE_EMOJIS[0]);
   const [bloomAt, setBloomAt] = useState<Date>(getDefaultBloomDate);
   const [pickerMode, setPickerMode] = useState<"date" | "time" | null>(null);
+  const [circleToArchive, setCircleToArchive] = useState<CircleSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const createMutation = useMutation({
     mutationFn: (request: Parameters<typeof bloomApi.createCircle>[1]) =>
@@ -93,6 +94,18 @@ export default function CirclesScreen() {
         queryClient.invalidateQueries({ queryKey: queryKeys.stats }),
       ]);
     },
+  });
+  const archiveMutation = useMutation({
+    mutationFn: (circleId: string) => bloomApi.archiveCircle(session!.accessToken, circleId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.circles }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.archivedCircles }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats }),
+      ]);
+    },
+    onError: (archiveError) => setError(archiveError instanceof Error ? archiveError.message : t("requestFailed")),
   });
 
   const load = useCallback(async () => {
@@ -154,6 +167,22 @@ export default function CirclesScreen() {
     },
     [load, respondMutation, session?.accessToken, t],
   );
+
+  const archive = useCallback((circle: CircleSummary) => {
+    if (circle.status !== "Bloomed" || archiveMutation.isPending) return;
+    setCircleToArchive(circle);
+  }, [archiveMutation.isPending]);
+
+  const confirmArchive = useCallback(async () => {
+    if (!circleToArchive || archiveMutation.isPending) return;
+    try {
+      await archiveMutation.mutateAsync(circleToArchive.id);
+      setCircleToArchive(null);
+    } catch {
+      // Close the confirmation sheet so the shared InlineAlert can be seen.
+      setCircleToArchive(null);
+    }
+  }, [archiveMutation, circleToArchive]);
 
   const header = useMemo(
     () => (
@@ -235,7 +264,7 @@ export default function CirclesScreen() {
   );
 
   return (
-    <Screen scroll={false}>
+    <Screen bottomPadding={96} scroll={false}>
       {isLoading ? (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.coralDark} />
@@ -243,6 +272,8 @@ export default function CirclesScreen() {
       ) : (
         <FlashList
           data={circles}
+          contentContainerStyle={styles.listContent}
+          style={styles.list}
           keyExtractor={(item) => item.id}
           ListEmptyComponent={
             <Text style={styles.empty}>{t("noCirclesYet")}</Text>
@@ -253,6 +284,7 @@ export default function CirclesScreen() {
           renderItem={({ item }) => (
             <CircleCard
               circle={item}
+              onArchive={item.status === "Bloomed" ? () => archive(item) : undefined}
               onPress={() =>
                 router.push({
                   pathname: "/circle-detail/[circleId]",
@@ -375,6 +407,39 @@ export default function CirclesScreen() {
               </Pressable>
         </ScrollView>
       </BottomSheet>
+      <BottomSheet
+        backdropStyle={styles.sheetBackdrop}
+        onClose={() => setCircleToArchive(null)}
+        sheetStyle={styles.sheet}
+        visible={circleToArchive !== null}
+      >
+        <View style={styles.sheetHandle} />
+        <View style={styles.archiveConfirmIcon}>
+          <MaterialCommunityIcons color={colors.sageDark} name="archive-outline" size={28} />
+        </View>
+        <Text style={styles.confirmTitle}>{t("archiveCircleTitle")}</Text>
+        <Text style={styles.confirmBody}>{t("archiveCircleBody")}</Text>
+        <Pressable
+          accessibilityRole="button"
+          disabled={archiveMutation.isPending}
+          onPress={() => void confirmArchive()}
+          style={[styles.primaryButton, archiveMutation.isPending ? styles.saveButtonDisabled : null]}
+        >
+          {archiveMutation.isPending ? (
+            <ActivityIndicator color={colors.card} />
+          ) : (
+            <Text style={styles.primaryButtonText}>{t("archiveCircle")}</Text>
+          )}
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={archiveMutation.isPending}
+          onPress={() => setCircleToArchive(null)}
+          style={styles.cancelButton}
+        >
+          <Text style={styles.cancelButtonText}>{t("cancel")}</Text>
+        </Pressable>
+      </BottomSheet>
     </Screen>
   );
 }
@@ -382,38 +447,53 @@ export default function CirclesScreen() {
 function CircleCard({
   circle,
   onPress,
+  onArchive,
 }: {
   circle: CircleSummary;
   onPress?: () => void;
+  onArchive?: () => void;
 }) {
   const { t } = useSettings();
   const bloomed = circle.status === "Bloomed";
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${t("openCircle")} ${circle.name}`}
-      disabled={!onPress}
-      onPress={onPress}
-      style={styles.circleCard}
-    >
-      <Text style={styles.circleEmoji}>{circle.emoji}</Text>
-      <View style={styles.circleCopy}>
-        <View style={styles.cardTitleRow}>
-          <Text style={styles.cardTitle}>{circle.name}</Text>
-          <Text style={[styles.status, bloomed && styles.statusBloomed]}>
-            {bloomed ? t("bloomedStatus") : t("sealedStatus")}
+    <View style={styles.circleCardContainer}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${t("openCircle")} ${circle.name}`}
+        disabled={!onPress}
+        onPress={onPress}
+        style={styles.circleCard}
+      >
+        <Text style={styles.circleEmoji}>{circle.emoji}</Text>
+        <View style={styles.circleCopy}>
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardTitle}>{circle.name}</Text>
+            <Text style={[styles.status, bloomed && styles.statusBloomed]}>
+              {bloomed ? t("bloomedStatus") : t("sealedStatus")}
+            </Text>
+          </View>
+          <Text style={styles.cardBody}>
+            {bloomed
+              ? t("sharedTimelineReady")
+              : `${t("circleBlooms")} ${formatLocalDate(circle.bloomAtUtc)}`}
+          </Text>
+          <Text style={styles.memberCount}>
+            {circle.memberCount}{" "}
+            {circle.memberCount === 1 ? t("member") : t("memberPlural")}
           </Text>
         </View>
-        <Text style={styles.cardBody}>
-          {bloomed
-            ? t("sharedTimelineReady")
-            : `${t("circleBlooms")} ${formatLocalDate(circle.bloomAtUtc)}`}
-        </Text>
-        <Text style={styles.memberCount}>
-          {circle.memberCount}{" "}
-          {circle.memberCount === 1 ? t("member") : t("memberPlural")}
-        </Text>
-      </View>
-    </Pressable>
+      </Pressable>
+      {onArchive ? (
+        <Pressable
+          accessibilityLabel={t("archiveCircle")}
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={onArchive}
+          style={styles.archiveButton}
+        >
+          <MaterialCommunityIcons color={colors.inkSoft} name="close" size={18} />
+        </Pressable>
+      ) : null}
+    </View>
   );
 }

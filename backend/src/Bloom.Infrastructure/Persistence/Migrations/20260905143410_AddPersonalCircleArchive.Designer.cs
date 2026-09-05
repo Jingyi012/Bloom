@@ -3,6 +3,7 @@ using System;
 using Bloom.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Bloom.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(BloomDbContext))]
-    partial class BloomDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260905143410_AddPersonalCircleArchive")]
+    partial class AddPersonalCircleArchive
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -277,8 +280,8 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("Mood")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("PromptKey")
                         .HasMaxLength(128)
@@ -467,67 +470,10 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                     b.ToTable("Reaction", (string)null);
                 });
 
-            modelBuilder.Entity("Bloom.Domain.Identity.FriendRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("DeletedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("FirstAddedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("FriendUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("LastModifiedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("LastModifiedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("LastSeenAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DeletedAtUtc");
-
-                    b.HasIndex("FriendUserId");
-
-                    b.HasIndex("UserId", "FriendUserId")
-                        .IsUnique();
-
-                    b.HasIndex("UserId", "LastSeenAtUtc");
-
-                    b.ToTable("FriendRecord", (string)null);
-                });
-
             modelBuilder.Entity("Bloom.Domain.Identity.User", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("AvatarContentType")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("AvatarPath")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -746,21 +692,6 @@ namespace Bloom.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("EntryPublicationId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Bloom.Domain.Identity.FriendRecord", b =>
-                {
-                    b.HasOne("Bloom.Domain.Identity.User", null)
-                        .WithMany()
-                        .HasForeignKey("FriendUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Bloom.Domain.Identity.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

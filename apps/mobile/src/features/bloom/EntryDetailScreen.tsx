@@ -363,11 +363,19 @@ function formatTime(value: string): string {
 }
 
 function moodEmoji(mood: string): string {
-  return {
+  const emojis: Record<string, string> = {
     heavy: '\u{1F622}',
     restless: '\u{1F610}',
-    calm: '\u{1F642}',
+    calm: '\u{1F60C}',
     joyful: '\u{1F604}',
     radiant: '\u{1F929}',
-  }[mood] ?? mood;
+    angry: '\u{1F621}',
+    anxious: '\u{1F630}',
+    tired: '\u{1F634}',
+    grateful: '\u{1F64F}',
+    loved: '\u{1F970}',
+    focused: '\u{1F914}',
+    frustrated: '\u{1F624}',
+  };
+  return mood.split('|').map((value) => emojis[value] ?? value).join(' ');
 }

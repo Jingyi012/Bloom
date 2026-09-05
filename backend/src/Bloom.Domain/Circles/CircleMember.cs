@@ -24,6 +24,9 @@ public sealed class CircleMember : AuditableEntity
     /// <summary>Gets the departure instant, when the member has left.</summary>
     public DateTimeOffset? LeftAtUtc { get; private set; }
 
+    /// <summary>Gets the instant this member archived the circle for their own view.</summary>
+    public DateTimeOffset? ArchivedAtUtc { get; private set; }
+
     internal static CircleMember Create(Guid circleId, Guid userId, CircleMemberRole role, DateTimeOffset joinedAtUtc) => new()
     {
         CircleId = circleId,
@@ -33,4 +36,8 @@ public sealed class CircleMember : AuditableEntity
     };
 
     internal void Leave(DateTimeOffset leftAtUtc) => LeftAtUtc = leftAtUtc.ToUniversalTime();
+
+    internal void Archive(DateTimeOffset archivedAtUtc) => ArchivedAtUtc = archivedAtUtc.ToUniversalTime();
+
+    internal void RestoreArchive() => ArchivedAtUtc = null;
 }

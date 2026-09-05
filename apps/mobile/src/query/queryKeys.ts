@@ -5,6 +5,7 @@ export const queryKeys = {
   archivedCircles: ["circles", "archived"] as const,
   invitations: ["circle-invitations"] as const,
   stats: ["stats"] as const,
+  friends: ["friends"] as const,
   circle: (circleId: string) => ["circle", circleId] as const,
   todayEntry: ["entries", "today"] as const,
   diaryCalendar: (from: string, to: string) => ["entries", "calendar", from, to] as const,

@@ -6,6 +6,7 @@ export type LocalSettings = {
   language: Language;
   remindersEnabled: boolean;
   reminderTime: string;
+  customMoods: string[];
 };
 
 const STORAGE_KEY = 'bloom.settings.v1';
@@ -13,6 +14,7 @@ export const defaultSettings: LocalSettings = {
   language: 'en',
   remindersEnabled: true,
   reminderTime: '20:00',
+  customMoods: [],
 };
 
 export async function readLocalSettings(): Promise<LocalSettings> {
@@ -24,6 +26,9 @@ export async function readLocalSettings(): Promise<LocalSettings> {
       language: parsed.language === 'zh' ? 'zh' : 'en',
       remindersEnabled: parsed.remindersEnabled ?? defaultSettings.remindersEnabled,
       reminderTime: typeof parsed.reminderTime === 'string' ? parsed.reminderTime : defaultSettings.reminderTime,
+      customMoods: Array.isArray(parsed.customMoods)
+        ? [...new Set(parsed.customMoods.filter((mood): mood is string => typeof mood === 'string').map((mood) => mood.trim()).filter(Boolean))].slice(0, 20)
+        : defaultSettings.customMoods,
     };
   } catch {
     return defaultSettings;

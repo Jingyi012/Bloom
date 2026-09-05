@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Bloom.Application.Identity;
+using Bloom.Application.Media;
 using Bloom.Contracts.Profile;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -38,9 +39,26 @@ public sealed class MeController(IGoogleUserService googleUserService) : Control
         try
         {
             var user = await _googleUserService.UpdateProfileAsync(userId, request.DisplayName, request.TimeZoneId, cancellationToken).ConfigureAwait(false);
-            return user is null ? NotFound() : Ok(new CurrentUserResponse(user.Id, user.DisplayName, user.Email, user.GoogleAvatarUrl, user.TimeZoneId));
+            return user is null ? NotFound() : Ok(ToResponse(user));
         }
         catch (ArgumentException exception) { return BadRequest(exception.Message); }
+    }
+
+    /// <summary>Uploads a Bloom-managed profile avatar.</summary>
+    [HttpPost("avatar")]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<ActionResult<CurrentUserResponse>> UploadAvatarAsync(IFormFile? avatar, CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        if (avatar is null || avatar.Length == 0) return BadRequest("An avatar image is required.");
+        try
+        {
+            await using var stream = avatar.OpenReadStream();
+            var user = await _googleUserService.UpdateAvatarAsync(userId, new ImageUpload(stream, avatar.ContentType), cancellationToken).ConfigureAwait(false);
+            return user is null ? NotFound() : Ok(ToResponse(user));
+        }
+        catch (ArgumentException exception) { return BadRequest(exception.Message); }
+        catch (InvalidOperationException exception) { return BadRequest(exception.Message); }
     }
 
     /// <summary>Gets the current user's safe writing statistics.</summary>
@@ -50,6 +68,15 @@ public sealed class MeController(IGoogleUserService googleUserService) : Control
         if (!TryGetUserId(out var userId)) return Unauthorized();
         var stats = await _googleUserService.GetStatsAsync(userId, cancellationToken).ConfigureAwait(false);
         return Ok(new UserStatsResponse(stats.TotalEntries, stats.ActiveCircles, stats.BloomedCircles, stats.CurrentStreak));
+    }
+
+    /// <summary>Lists friends previously connected through Bloom.</summary>
+    [HttpGet("friends")]
+    public async Task<ActionResult<IReadOnlyList<FriendResponse>>> FriendsAsync(CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        var friends = await _googleUserService.ListFriendsAsync(userId, cancellationToken).ConfigureAwait(false);
+        return Ok(friends.Select(friend => new FriendResponse(friend.UserId, friend.DisplayName, friend.Email, friend.AvatarUrl, friend.LastSeenAtUtc)).ToArray());
     }
 
     /// <summary>Soft-deletes the current user's account.</summary>
@@ -65,8 +92,11 @@ public sealed class MeController(IGoogleUserService googleUserService) : Control
         var user = await _googleUserService.FindByIdAsync(userId, cancellationToken).ConfigureAwait(false);
         return user is null
             ? NotFound()
-            : Ok(new CurrentUserResponse(user.Id, user.DisplayName, user.Email, user.GoogleAvatarUrl, user.TimeZoneId));
+            : Ok(ToResponse(user));
     }
+
+    private static CurrentUserResponse ToResponse(Bloom.Domain.Identity.User user) =>
+        new(user.Id, user.DisplayName, user.Email, user.GetAvatarReference(), user.TimeZoneId);
 
     private bool TryGetUserId(out Guid userId)
     {

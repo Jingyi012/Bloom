@@ -23,6 +23,9 @@ public sealed class BloomDbContext(DbContextOptions<BloomDbContext> options) : D
     /// <summary>Gets persisted refresh-token sessions.</summary>
     public DbSet<UserSession> UserSessions => Set<UserSession>();
 
+    /// <summary>Gets persisted private friend history.</summary>
+    public DbSet<FriendRecord> FriendRecords => Set<FriendRecord>();
+
     /// <summary>Gets persisted diary entries.</summary>
     public DbSet<DiaryEntry> DiaryEntries => Set<DiaryEntry>();
 

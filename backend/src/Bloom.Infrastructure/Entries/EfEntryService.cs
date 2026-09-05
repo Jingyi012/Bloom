@@ -500,7 +500,7 @@ public sealed class EfEntryService(
             .Take(CommentPageSize + 1).ToArrayAsync(cancellationToken).ConfigureAwait(false);
         var hasNext = rows.Length > CommentPageSize;
         var pageRows = rows.Take(CommentPageSize).ToArray();
-        var comments = pageRows.Select(item => new CommentResult(item.comment.Id, item.comment.AuthorUserId, item.author.DisplayName, item.author.GoogleAvatarUrl, item.comment.Body, item.comment.CreatedAtUtc, item.comment.AuthorUserId == userId)).ToArray();
+        var comments = pageRows.Select(item => new CommentResult(item.comment.Id, item.comment.AuthorUserId, item.author.DisplayName, item.author.GetAvatarReference(), item.comment.Body, item.comment.CreatedAtUtc, item.comment.AuthorUserId == userId)).ToArray();
         var nextCursor = hasNext && pageRows.Length > 0 ? EncodeCursor(new CommentCursor(pageRows[^1].comment.CreatedAtUtc, pageRows[^1].comment.Id)) : null;
         return new CommentPage(comments, nextCursor);
     }
@@ -514,7 +514,7 @@ public sealed class EfEntryService(
         _auditStampWriter.StampCreated(comment, userId);
         _db.Comments.Add(comment);
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        return new CommentResult(comment.Id, userId, author.DisplayName, author.GoogleAvatarUrl, comment.Body, comment.CreatedAtUtc, true);
+        return new CommentResult(comment.Id, userId, author.DisplayName, author.GetAvatarReference(), comment.Body, comment.CreatedAtUtc, true);
     }
 
     /// <inheritdoc />
@@ -546,7 +546,7 @@ public sealed class EfEntryService(
             row.diaryEntry.Id,
             row.author.Id,
             row.author.DisplayName,
-            row.author.GoogleAvatarUrl,
+            row.author.GetAvatarReference(),
             row.publication.AuthorLocalDate,
             row.publication.SubmittedAtUtc,
             _entryProtector.Unprotect(row.diaryEntry.Text),

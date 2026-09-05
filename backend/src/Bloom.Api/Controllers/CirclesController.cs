@@ -121,6 +121,44 @@ public sealed class CirclesController(
         catch (InvalidOperationException exception) { return Conflict(exception.Message); }
     }
 
+    /// <summary>Archives a bloomed circle for the current member while preserving its audit history.</summary>
+    [HttpPost("{circleId:guid}/archive")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult> ArchiveAsync(Guid circleId, CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        try
+        {
+            return await _circleService.ArchiveAsync(circleId, userId, cancellationToken).ConfigureAwait(false)
+                ? NoContent()
+                : NotFound();
+        }
+        catch (UnauthorizedAccessException exception) { return StatusCode(StatusCodes.Status403Forbidden, exception.Message); }
+        catch (InvalidOperationException exception) { return Conflict(exception.Message); }
+    }
+
+    /// <summary>Restores a personally archived bloomed circle to the current member's active list.</summary>
+    [HttpDelete("{circleId:guid}/archive")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult> UnarchiveAsync(Guid circleId, CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        try
+        {
+            return await _circleService.UnarchiveAsync(circleId, userId, cancellationToken).ConfigureAwait(false)
+                ? NoContent()
+                : NotFound();
+        }
+        catch (InvalidOperationException exception) { return Conflict(exception.Message); }
+    }
+
     /// <summary>Invites an existing Bloom user.</summary>
     [HttpPost("{circleId:guid}/invitations")]
     public async Task<ActionResult> InviteAsync(Guid circleId, InviteCircleMemberRequest request, CancellationToken cancellationToken)
@@ -188,6 +226,21 @@ public sealed class CirclesController(
         }
     }
 
+    /// <summary>Removes a member from a sealed circle at the creator's request.</summary>
+    [HttpDelete("{circleId:guid}/members/{memberUserId:guid}")]
+    public async Task<ActionResult> RemoveMemberAsync(Guid circleId, Guid memberUserId, CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        try
+        {
+            return await _circleService.RemoveMemberAsync(circleId, userId, memberUserId, cancellationToken).ConfigureAwait(false)
+                ? NoContent()
+                : NotFound();
+        }
+        catch (UnauthorizedAccessException exception) { return StatusCode(StatusCodes.Status403Forbidden, exception.Message); }
+        catch (InvalidOperationException exception) { return Conflict(exception.Message); }
+    }
+
     private bool TryGetUserId(out Guid userId)
     {
         var subject = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
@@ -207,7 +260,8 @@ public sealed class CirclesController(
             circle.TimeZoneId,
             circle.Members.Count(member => member.LeftAtUtc is null),
             circle.CreatorUserId == userId,
-            member?.Role != CircleMemberRole.Creator && currentStatus == CircleStatus.Sealed);
+            member?.Role != CircleMemberRole.Creator && currentStatus == CircleStatus.Sealed && member?.ArchivedAtUtc is null,
+            member?.ArchivedAtUtc is not null);
     }
 
     private async Task<CircleDetailResponse> ToDetailAsync(Circle circle, Guid userId, CancellationToken cancellationToken)
@@ -218,7 +272,7 @@ public sealed class CirclesController(
         {
             var user = await _googleUserService.FindByIdAsync(member.UserId, cancellationToken).ConfigureAwait(false);
             if (user is not null)
-                members.Add(new CircleMemberResponse(user.Id, user.DisplayName, user.GoogleAvatarUrl, member.Role.ToString(), member.JoinedAtUtc, true));
+                members.Add(new CircleMemberResponse(user.Id, user.DisplayName, user.GetAvatarReference(), member.Role.ToString(), member.JoinedAtUtc, true));
         }
         return new CircleDetailResponse(ToSummary(circle, userId), members);
     }

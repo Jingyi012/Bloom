@@ -17,6 +17,7 @@ import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { Image } from "expo-image";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Screen } from "@/components/Screen";
+import { BottomSheet } from "@/components/BottomSheet";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
 import type { CircleSummary, EntrySubmissionRequest, TodayEntryStatus, UpdateTodayEntryRequest } from "@/types/api";
@@ -36,12 +37,21 @@ import { queryKeys } from "@/query/queryKeys";
 import { PhotoViewer } from "@/components/PhotoViewer";
 
 const MOODS = [
-  { key: "heavy", emoji: "😢" },
-  { key: "restless", emoji: "😐" },
-  { key: "calm", emoji: "🙂" },
   { key: "joyful", emoji: "😄" },
-  { key: "radiant", emoji: "🤩" },
+  { key: "heavy", emoji: "😢" },
+  { key: "angry", emoji: "😡" },
+  { key: "calm", emoji: "😌" },
 ] as const;
+const LEGACY_MOOD_EMOJIS: Record<string, string> = {
+  restless: "😐",
+  radiant: "🤩",
+  anxious: "😰",
+  tired: "😴",
+  grateful: "🙏",
+  loved: "🥰",
+  focused: "🤔",
+  frustrated: "😤",
+};
 const PROMPTS = [
   { key: "small_joy", translationKey: "promptSmallJoy" },
   { key: "learned", translationKey: "promptLearned" },
@@ -60,6 +70,16 @@ type EditorSnapshot = {
 
 function createClientEntryId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+const MOOD_SEPARATOR = "|";
+function parseMoodValue(value?: string | null): string[] {
+  return value ? value.split(MOOD_SEPARATOR).map((mood) => mood.trim()).filter(Boolean) : [];
+}
+
+function encodeMoodValue(values: string[]): string | undefined {
+  const unique = [...new Set(values.map((mood) => mood.trim()).filter(Boolean))];
+  return unique.length > 0 ? unique.join(MOOD_SEPARATOR) : undefined;
 }
 
 function getLocalDate() {
@@ -99,7 +119,7 @@ async function normalizeSelectedImage(asset: ImagePicker.ImagePickerAsset): Prom
 export default function WriteScreen() {
   const router = useRouter();
   const { session, user } = useAuth();
-  const { t } = useSettings();
+  const { addCustomMood, customMoods, removeCustomMood, t } = useSettings();
   const queryClient = useQueryClient();
   const circlesQuery = useQuery({
     queryKey: queryKeys.circles,
@@ -115,7 +135,9 @@ export default function WriteScreen() {
   const todayStatus: TodayEntryStatus | null = todayQuery.data ?? null;
   const [selectedCircleIds, setSelectedCircleIds] = useState<string[]>([]);
   const [text, setText] = useState("");
-  const [mood, setMood] = useState<string | undefined>();
+  const [moods, setMoods] = useState<string[]>([]);
+  const [showCustomMoodSheet, setShowCustomMoodSheet] = useState(false);
+  const [customMoodInput, setCustomMoodInput] = useState("");
   const [promptKey, setPromptKey] = useState<string | undefined>();
   const [isEditingToday, setIsEditingToday] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -138,6 +160,12 @@ export default function WriteScreen() {
   const skipNextDraftSave = useRef(false);
   const [localDate, setLocalDate] = useState(getLocalDate);
   const currentDraftKey = user ? draftKey(user.id, localDate) : null;
+  const customMoodOptions = useMemo(() => {
+    const currentCustomMoods = moods.filter((mood) => !MOODS.some((option) => option.key === mood) && !LEGACY_MOOD_EMOJIS[mood]);
+    return [...new Set([...customMoods, ...currentCustomMoods])];
+  }, [customMoods, moods]);
+  const moodEmoji = (value: string) =>
+    MOODS.find((option) => option.key === value)?.emoji ?? LEGACY_MOOD_EMOJIS[value] ?? value;
 
   const isLoading = circlesQuery.isPending;
   const isTodayStatusLoading = todayQuery.isPending;
@@ -147,6 +175,31 @@ export default function WriteScreen() {
     setError(null);
     await Promise.all([circlesQuery.refetch(), todayQuery.refetch()]);
   }, [circlesQuery, todayQuery]);
+
+  const openCustomMoodSheet = useCallback(() => {
+    setCustomMoodInput("");
+    setShowCustomMoodSheet(true);
+  }, []);
+
+  const saveCustomMood = useCallback(() => {
+    const value = customMoodInput.trim();
+    if (!value) {
+      setError(t("customMoodRequired"));
+      return;
+    }
+    if (value.includes(MOOD_SEPARATOR)) {
+      setError(t("customMoodInvalid"));
+      return;
+    }
+    if ([...value].length > 8) {
+      setError(t("customMoodTooLong"));
+      return;
+    }
+    addCustomMood(value);
+    setMoods((current) => current.includes(value) ? current : [...current, value]);
+    setShowCustomMoodSheet(false);
+    setError(null);
+  }, [addCustomMood, customMoodInput, t]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -168,7 +221,7 @@ export default function WriteScreen() {
       if (draft) {
         setDraftClientEntryId(draft.clientEntryId);
         setText(draft.text);
-        setMood(draft.mood);
+        setMoods(parseMoodValue(draft.mood));
         setPromptKey(draft.promptKey);
         setSelectedCircleIds(draft.selectedCircleIds);
         const restoredImageUris = draft.imageUris ?? [];
@@ -197,7 +250,7 @@ export default function WriteScreen() {
       void saveWriteDraft(currentDraftKey, {
         clientEntryId,
         text,
-        mood,
+        mood: encodeMoodValue(moods),
         promptKey,
         selectedCircleIds,
         imageUris: imageUris.length > 0 ? imageUris : undefined,
@@ -209,7 +262,7 @@ export default function WriteScreen() {
     draftClientEntryId,
     imageUris,
     isDraftReady,
-    mood,
+    moods,
     promptKey,
     selectedCircleIds,
     text,
@@ -300,7 +353,7 @@ export default function WriteScreen() {
 
   const clearEditor = useCallback(async () => {
     setText("");
-    setMood(undefined);
+    setMoods([]);
     setPromptKey(undefined);
     setSelectedCircleIds([]);
     photoIdentityByUri.current.clear();
@@ -317,7 +370,7 @@ export default function WriteScreen() {
     if (!todayStatus?.hasEntry || !todayStatus.canModify) return;
     editingSnapshot.current = {
       text,
-      mood,
+      mood: encodeMoodValue(moods),
       promptKey,
       selectedCircleIds: selectedCircleIds.slice(),
       imageUris: imageUris.slice(),
@@ -325,7 +378,7 @@ export default function WriteScreen() {
       draftClientEntryId,
     };
     setText(todayStatus.text ?? "");
-    setMood(todayStatus.mood ?? undefined);
+    setMoods(parseMoodValue(todayStatus.mood));
     setPromptKey(todayStatus.promptKey ?? undefined);
     setSelectedCircleIds(todayStatus.circleIds);
     const existingMediaIds = todayStatus.mediaIds ?? [];
@@ -337,13 +390,13 @@ export default function WriteScreen() {
     setIsEditingToday(true);
     setError(null);
     setNotice(null);
-  }, [draftClientEntryId, imageMediaIds, imageUris, mood, promptKey, selectedCircleIds, text, todayStatus]);
+  }, [draftClientEntryId, imageMediaIds, imageUris, moods, promptKey, selectedCircleIds, text, todayStatus]);
 
   const cancelEditingToday = useCallback(() => {
     const snapshot = editingSnapshot.current;
     if (snapshot) {
       setText(snapshot.text);
-      setMood(snapshot.mood);
+      setMoods(parseMoodValue(snapshot.mood));
       setPromptKey(snapshot.promptKey);
       setSelectedCircleIds(snapshot.selectedCircleIds);
       setImageUris(snapshot.imageUris);
@@ -405,7 +458,7 @@ export default function WriteScreen() {
       saveMutation.mutate({
         request: {
           text: text.trim(),
-          mood,
+          mood: encodeMoodValue(moods),
           promptKey,
           circleIds: selectedAvailableCircleIds,
           retainedMediaIds: imageMediaIds.filter((id): id is string => Boolean(id)),
@@ -426,7 +479,7 @@ export default function WriteScreen() {
           authorLocalDate: localDate,
           authorTimeZoneId: getDeviceTimeZone(),
           text: text.trim(),
-          mood,
+          mood: encodeMoodValue(moods),
           promptKey,
           circleIds: selectedAvailableCircleIds,
       };
@@ -452,7 +505,7 @@ export default function WriteScreen() {
     imageUris,
     imageMediaIds,
     localDate,
-    mood,
+    moods,
     promptKey,
     selectedAvailableCircleIds,
     session?.accessToken,
@@ -627,27 +680,67 @@ export default function WriteScreen() {
             </View>
           ) : null}
           <Text style={styles.section}>{t("mood")}</Text>
-          <View style={styles.moodRow}>
-            {MOODS.map((option) => (
-              <Pressable
-                accessibilityLabel={`${t("moodAccessibility")} ${t(option.key)}`}
-                accessibilityRole="button"
-                accessibilityState={{ selected: mood === option.key }}
-                key={option.key}
-                onPress={() =>
-                  setMood((current) =>
-                    current === option.key ? undefined : option.key,
-                  )
-                }
-                style={[
-                  styles.moodTile,
-                  mood === option.key ? styles.moodTileSelected : null,
-                ]}
-              >
-                <Text style={styles.moodEmoji}>{option.emoji}</Text>
-              </Pressable>
-            ))}
-          </View>
+          <ScrollView
+            contentContainerStyle={styles.moodRow}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+          >
+            {MOODS.map((option) => {
+              const selected = moods.includes(option.key);
+              return (
+                <Pressable
+                  accessibilityLabel={`${t("moodAccessibility")} ${t(option.key)}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  key={option.key}
+                  onPress={() => setMoods((current) => selected
+                    ? current.filter((value) => value !== option.key)
+                    : [...current, option.key])}
+                  style={[styles.moodTile, selected ? styles.moodTileSelected : null]}
+                >
+                  <Text style={styles.moodEmoji}>{option.emoji}</Text>
+                </Pressable>
+              );
+            })}
+            {customMoodOptions.map((customMood) => {
+              const selected = moods.includes(customMood);
+              return (
+                <View key={customMood} style={styles.customMoodTileWrap}>
+                  <Pressable
+                    accessibilityLabel={`${t("moodAccessibility")} ${customMood}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => setMoods((current) => selected
+                      ? current.filter((value) => value !== customMood)
+                      : [...current, customMood])}
+                    style={[styles.moodTile, selected ? styles.moodTileSelected : null]}
+                  >
+                    <Text style={styles.moodEmoji}>{moodEmoji(customMood)}</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel={`${t("removeCustomMood")} ${customMood}`}
+                    accessibilityRole="button"
+                    hitSlop={6}
+                    onPress={() => {
+                      removeCustomMood(customMood);
+                      setMoods((current) => current.filter((value) => value !== customMood));
+                    }}
+                    style={styles.removeCustomMood}
+                  >
+                    <MaterialCommunityIcons color={colors.card} name="close" size={11} />
+                  </Pressable>
+                </View>
+              );
+            })}
+            <Pressable
+              accessibilityLabel={t("addCustomMood")}
+              accessibilityRole="button"
+              onPress={openCustomMoodSheet}
+              style={styles.moodAddTile}
+            >
+              <MaterialCommunityIcons color={colors.sageDark} name="plus" size={25} />
+            </Pressable>
+          </ScrollView>
 
           <TextInput
             accessibilityLabel={t("diaryEntry")}
@@ -816,6 +909,41 @@ export default function WriteScreen() {
           </Pressable>
         </>
       )}
+      <BottomSheet
+        backdropStyle={styles.sheetBackdrop}
+        onClose={() => setShowCustomMoodSheet(false)}
+        sheetStyle={styles.sheet}
+        visible={showCustomMoodSheet}
+      >
+        <View style={styles.sheetHandle} />
+        <View style={styles.sheetHeader}>
+          <Text style={styles.sheetTitle}>{t("customMood")}</Text>
+          <Pressable
+            accessibilityLabel={t("cancel")}
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={() => setShowCustomMoodSheet(false)}
+            style={styles.sheetClose}
+          >
+            <MaterialCommunityIcons color={colors.inkSoft} name="close" size={20} />
+          </Pressable>
+        </View>
+        <Text style={styles.customMoodHint}>{t("customMoodHint")}</Text>
+        <TextInput
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoFocus
+          maxLength={8}
+          onChangeText={setCustomMoodInput}
+          placeholder={t("customMoodPlaceholder")}
+          placeholderTextColor={colors.inkSoft}
+          style={styles.input}
+          value={customMoodInput}
+        />
+        <Pressable accessibilityRole="button" onPress={saveCustomMood} style={styles.primaryButton}>
+          <Text style={styles.primaryButtonText}>{t("saveMood")}</Text>
+        </Pressable>
+      </BottomSheet>
       <PhotoViewer
         initialIndex={viewerIndex ?? 0}
         onClose={() => setViewerIndex(null)}

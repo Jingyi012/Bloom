@@ -15,7 +15,9 @@ public sealed class DiaryEntryConfiguration : IEntityTypeConfiguration<DiaryEntr
         builder.Property(entity => entity.ClientEntryId).HasMaxLength(100).IsRequired();
         builder.Property(entity => entity.AuthorTimeZoneId).HasMaxLength(100).IsRequired();
         builder.Property(entity => entity.Text).HasMaxLength(20000).IsRequired();
-        builder.Property(entity => entity.Mood).HasMaxLength(32);
+        // Multiple selected moods are stored as a compact pipe-delimited value
+        // for backwards compatibility with existing diary rows.
+        builder.Property(entity => entity.Mood).HasMaxLength(256);
         builder.Property(entity => entity.PromptKey).HasMaxLength(128);
         builder.HasIndex(entity => new { entity.AuthorUserId, entity.ClientEntryId }).IsUnique();
         builder.HasIndex(entity => new { entity.AuthorUserId, entity.AuthorLocalDate }).IsUnique();

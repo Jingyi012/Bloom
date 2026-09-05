@@ -43,7 +43,8 @@ public sealed record CircleSummaryResponse(
     string TimeZoneId,
     int MemberCount,
     bool IsCreator,
-    bool CanLeave);
+    bool CanLeave,
+    bool IsArchivedForCurrentUser);
 
 /// <summary>Circle details and active members.</summary>
 public sealed record CircleDetailResponse(

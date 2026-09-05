@@ -5,6 +5,7 @@ export const screenStyles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   keyboardRoot: { flex: 1 },
   content: { flexGrow: 1, padding: spacing.xl, backgroundColor: colors.background },
+  contentFixed: { flex: 1 },
 });
 
 export const primaryButtonStyles = StyleSheet.create({

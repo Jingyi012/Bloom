@@ -29,6 +29,12 @@ public sealed class User : AuditableEntity
     /// <summary>Gets the optional Google avatar URL.</summary>
     public string? GoogleAvatarUrl { get; private set; }
 
+    /// <summary>Gets the optional Bloom-managed avatar path.</summary>
+    public string? AvatarPath { get; private set; }
+
+    /// <summary>Gets the content type of the Bloom-managed avatar.</summary>
+    public string? AvatarContentType { get; private set; }
+
     /// <summary>Gets the user's IANA time-zone identifier.</summary>
     public string TimeZoneId { get; private set; } = "Asia/Kuala_Lumpur";
 
@@ -76,4 +82,16 @@ public sealed class User : AuditableEntity
         DisplayName = displayName.Trim();
         TimeZoneId = timeZoneId.Trim();
     }
+
+    /// <summary>Replaces the user's Bloom-managed avatar.</summary>
+    public void UpdateAvatar(string relativePath, string contentType)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
+        AvatarPath = relativePath.Trim();
+        AvatarContentType = contentType.Trim();
+    }
+
+    /// <summary>Gets the API-relative avatar reference, falling back to Google's avatar.</summary>
+    public string? GetAvatarReference() => AvatarPath is null ? GoogleAvatarUrl : $"users/{Id:D}/avatar";
 }

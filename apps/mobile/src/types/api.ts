@@ -26,6 +26,14 @@ export type CurrentUserResponse = {
   timeZoneId: string;
 };
 
+export type FriendSummary = {
+  userId: string;
+  displayName: string;
+  email: string;
+  avatarUrl: string | null;
+  lastSeenAtUtc: string;
+};
+
 export type UserStatsResponse = {
   totalEntries: number;
   activeCircles: number;
@@ -43,6 +51,7 @@ export type CircleSummary = {
   memberCount: number;
   isCreator: boolean;
   canLeave: boolean;
+  isArchivedForCurrentUser: boolean;
 };
 
 export type CircleMember = {

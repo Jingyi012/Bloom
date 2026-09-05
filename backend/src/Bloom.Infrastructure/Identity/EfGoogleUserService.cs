@@ -1,5 +1,6 @@
 using Bloom.Application.Auditing;
 using Bloom.Application.Identity;
+using Bloom.Application.Media;
 using Bloom.Domain.Identity;
 using Bloom.Domain.Circles;
 using Bloom.Domain.Entries;
@@ -11,10 +12,12 @@ namespace Bloom.Infrastructure.Identity;
 /// <summary>Persists Google-provisioned users in PostgreSQL.</summary>
 public sealed class EfGoogleUserService(
     BloomDbContext db,
-    IAuditStampWriter auditStampWriter) : IGoogleUserService
+    IAuditStampWriter auditStampWriter,
+    IImageStorage imageStorage) : IGoogleUserService
 {
     private readonly BloomDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
     private readonly IAuditStampWriter _auditStampWriter = auditStampWriter ?? throw new ArgumentNullException(nameof(auditStampWriter));
+    private readonly IImageStorage _imageStorage = imageStorage ?? throw new ArgumentNullException(nameof(imageStorage));
 
     /// <inheritdoc />
     public async Task<User> FindOrProvisionAsync(GoogleIdentity identity, CancellationToken cancellationToken)
@@ -70,6 +73,81 @@ public sealed class EfGoogleUserService(
         _auditStampWriter.StampModified(user, userId);
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return user;
+    }
+
+    /// <inheritdoc />
+    public async Task<User?> UpdateAvatarAsync(Guid userId, ImageUpload upload, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(upload);
+        var user = await _db.Users.SingleOrDefaultAsync(candidate => candidate.Id == userId && candidate.DeletedAtUtc == null, cancellationToken).ConfigureAwait(false);
+        if (user is null) return null;
+        var stored = await _imageStorage.SaveAsync(userId, upload.Content, upload.ContentType, cancellationToken).ConfigureAwait(false);
+        var previousPath = user.AvatarPath;
+        try
+        {
+            user.UpdateAvatar(stored.RelativePath, stored.ContentType);
+            _auditStampWriter.StampModified(user, userId);
+            await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(previousPath))
+                await _imageStorage.DeleteAsync(previousPath, cancellationToken).ConfigureAwait(false);
+            return user;
+        }
+        catch
+        {
+            await _imageStorage.DeleteAsync(stored.RelativePath, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task RecordFriendshipAsync(Guid userId, Guid friendUserId, CancellationToken cancellationToken)
+    {
+        if (userId == friendUserId) return;
+        var now = DateTimeOffset.UtcNow;
+        var first = userId.CompareTo(friendUserId) < 0 ? userId : friendUserId;
+        var second = first == userId ? friendUserId : userId;
+        var record = await _db.FriendRecords
+            .SingleOrDefaultAsync(candidate => candidate.UserId == first && candidate.FriendUserId == second, cancellationToken)
+            .ConfigureAwait(false);
+        if (record is null)
+        {
+            record = FriendRecord.Create(first, second, now);
+            _auditStampWriter.StampCreated(record, userId);
+            _db.FriendRecords.Add(record);
+        }
+        else
+        {
+            record.Touch(now);
+            _auditStampWriter.StampModified(record, userId);
+        }
+        await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<FriendSummary>> ListFriendsAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var rows = await (from record in _db.FriendRecords.AsNoTracking()
+                          join friend in _db.Users.AsNoTracking()
+                              on (record.UserId == userId ? record.FriendUserId : record.UserId) equals friend.Id
+                          where (record.UserId == userId || record.FriendUserId == userId)
+                              && record.DeletedAtUtc == null && friend.DeletedAtUtc == null
+                          orderby record.LastSeenAtUtc descending
+                          select new
+                          {
+                              friend.Id,
+                              friend.DisplayName,
+                              friend.Email,
+                              friend.AvatarPath,
+                              friend.GoogleAvatarUrl,
+                              record.LastSeenAtUtc,
+                          })
+            .ToArrayAsync(cancellationToken).ConfigureAwait(false);
+        return rows.Select(friend => new FriendSummary(
+            friend.Id,
+            friend.DisplayName,
+            friend.Email,
+            friend.AvatarPath is null ? friend.GoogleAvatarUrl : $"users/{friend.Id:D}/avatar",
+            friend.LastSeenAtUtc)).ToArray();
     }
 
     /// <inheritdoc />

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import * as ImagePicker from "expo-image-picker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import DateTimePicker, {
   type DateTimePickerChangeEvent,
@@ -23,7 +24,7 @@ import { colors } from "@/styles/tokens";
 import { profileStyles as styles } from "@/styles/screens/profile.styles";
 import { useSettings } from "@/settings/SettingsProvider";
 import { getDeviceTimeZone } from "@/utils/device";
-import { formatLocalTime } from "@/utils/date";
+import { formatLocalDateTime, formatLocalTime } from "@/utils/date";
 import { InlineAlert } from "@/components/InlineAlert";
 import { Avatar } from "@/components/Avatar";
 import { queryKeys } from "@/query/queryKeys";
@@ -49,8 +50,13 @@ export default function ProfileScreen() {
     queryFn: () => bloomApi.stats(session!.accessToken),
     enabled: Boolean(session?.accessToken),
   });
+  const friendsQuery = useQuery({
+    queryKey: queryKeys.friends,
+    queryFn: () => bloomApi.friends(session!.accessToken),
+    enabled: Boolean(session?.accessToken),
+  });
   const isLoading = statsQuery.isPending;
-  const isRefreshing = statsQuery.isFetching && !statsQuery.isPending;
+  const isRefreshing = (statsQuery.isFetching || friendsQuery.isFetching) && !statsQuery.isPending && !friendsQuery.isPending;
   const stats = statsQuery.data;
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -71,8 +77,16 @@ export default function ProfileScreen() {
   const deleteAccountMutation = useMutation({
     mutationFn: () => bloomApi.deleteAccount(session!.accessToken),
   });
+  const avatarMutation = useMutation({
+    mutationFn: ({ uri, contentType }: { uri: string; contentType?: string }) =>
+      bloomApi.uploadAvatar(session!.accessToken, uri, contentType),
+    onSuccess: async (updatedUser) => {
+      updateUser(updatedUser);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.me });
+    },
+  });
   const [sheet, setSheet] = useState<
-    "profile" | "language" | "reminder" | null
+    "profile" | "language" | "reminder" | "friends" | null
   >(null);
   const [showReminderPicker, setShowReminderPicker] = useState(false);
 
@@ -103,8 +117,8 @@ export default function ProfileScreen() {
   }, [sheet]);
 
   const loadStats = useCallback(async () => {
-    await statsQuery.refetch();
-  }, [statsQuery]);
+    await Promise.all([statsQuery.refetch(), friendsQuery.refetch()]);
+  }, [friendsQuery, statsQuery]);
   useEffect(() => {
     setDisplayName(user?.displayName ?? "");
   }, [user?.displayName]);
@@ -125,6 +139,35 @@ export default function ProfileScreen() {
       );
     }
   }, [displayName, saveMutation, session?.accessToken, t, updateUser]);
+
+  const pickAvatar = useCallback(async () => {
+    if (!session?.accessToken || avatarMutation.isPending) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError(t("allowPhotoAccess"));
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    setError(null);
+    setNotice(null);
+    try {
+      const asset = result.assets[0];
+      const updatedUser = await avatarMutation.mutateAsync({
+        uri: asset.uri,
+        contentType: asset.mimeType ?? "image/jpeg",
+      });
+      updateUser(updatedUser);
+      setNotice(t("avatarSaved"));
+    } catch (avatarError) {
+      setError(avatarError instanceof Error ? avatarError.message : t("avatarSaveFailed"));
+    }
+  }, [avatarMutation, session?.accessToken, t, updateUser]);
 
   const deleteAccount = useCallback(() => {
     if (!session?.accessToken) return;
@@ -153,14 +196,25 @@ export default function ProfileScreen() {
   return (
     <Screen onRefresh={() => void loadStats()} refreshing={isRefreshing}>
       <View style={styles.profileHead}>
-        <Avatar
-          accessibilityLabel={user?.displayName ?? t("yourProfile")}
-          containerStyle={styles.avatar}
-          imageStyle={styles.avatarImage}
-          initial={(user?.displayName || "?").slice(0, 1).toUpperCase()}
-          textStyle={styles.avatarText}
-          uri={user?.avatarUrl}
-        />
+        <View style={styles.avatarWrap}>
+          <Avatar
+            accessibilityLabel={user?.displayName ?? t("yourProfile")}
+            containerStyle={styles.avatar}
+            imageStyle={styles.avatarImage}
+            initial={(user?.displayName || "?").slice(0, 1).toUpperCase()}
+            textStyle={styles.avatarText}
+            uri={user?.avatarUrl}
+          />
+          <Pressable
+            accessibilityLabel={t("changeAvatar")}
+            accessibilityRole="button"
+            disabled={avatarMutation.isPending}
+            onPress={() => void pickAvatar()}
+            style={styles.avatarEdit}
+          >
+            <MaterialCommunityIcons color={colors.card} name="camera-outline" size={15} />
+          </Pressable>
+        </View>
         <Text style={styles.profileName}>
           {user?.displayName || t("yourProfile")}
         </Text>
@@ -202,6 +256,20 @@ export default function ProfileScreen() {
           <View style={styles.settingCopy}>
             <Text style={styles.settingTitle}>{t("editProfile")}</Text>
             <Text style={styles.hint}>{t("editProfileSubtitle")}</Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setSheet("friends")}
+          style={styles.settingRow}
+        >
+          <View style={styles.settingIcon}>
+            <MaterialCommunityIcons color={colors.sageDark} name="account-multiple-outline" size={20} />
+          </View>
+          <View style={styles.settingCopy}>
+            <Text style={styles.settingTitle}>{t("friends")}</Text>
+            <Text style={styles.hint}>{friendsQuery.data?.length ?? 0} {t("friendsRecorded")}</Text>
           </View>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
@@ -308,7 +376,9 @@ export default function ProfileScreen() {
                   ? t("editProfile")
                   : sheet === "language"
                     ? t("language")
-                    : t("reminder")}
+                    : sheet === "reminder"
+                      ? t("reminder")
+                      : t("friends")}
               </Text>
               <Pressable
                 accessibilityRole="button"
@@ -390,6 +460,34 @@ export default function ProfileScreen() {
                   <Text style={styles.saveText}>{t("done")}</Text>
                 </Pressable>
               </>
+            ) : sheet === "friends" ? (
+              <View>
+                {friendsQuery.isPending ? (
+                  <ActivityIndicator color={colors.coralDark} />
+                ) : friendsQuery.data?.length ? (
+                  friendsQuery.data.map((friend) => (
+                    <View key={friend.userId} style={styles.friendRow}>
+                      <Avatar
+                        accessibilityLabel={friend.displayName}
+                        containerStyle={styles.friendAvatar}
+                        imageStyle={styles.friendAvatarImage}
+                        initial={friend.displayName.trim().charAt(0).toUpperCase() || "?"}
+                        textStyle={styles.friendAvatarText}
+                        uri={friend.avatarUrl}
+                      />
+                      <View style={styles.settingCopy}>
+                        <Text style={styles.settingTitle}>{friend.displayName}</Text>
+                        <Text style={styles.hint}>{t("lastConnected")} · {formatLocalDateTime(friend.lastSeenAtUtc)}</Text>
+                      </View>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.emptyFriends}>{t("noFriendsYet")}</Text>
+                )}
+                <Pressable accessibilityRole="button" onPress={() => setSheet(null)} style={styles.save}>
+                  <Text style={styles.saveText}>{t("done")}</Text>
+                </Pressable>
+              </View>
             ) : (
               <>
                 <View style={styles.settingRow}>

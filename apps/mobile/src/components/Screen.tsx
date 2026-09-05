@@ -14,7 +14,11 @@ export function Screen({
   const insets = useSafeAreaInsets();
   const content = (
     <View
-      style={[screenStyles.content, { paddingBottom: bottomPadding + insets.bottom }]}
+      style={[
+        screenStyles.content,
+        !scroll ? screenStyles.contentFixed : null,
+        { paddingBottom: bottomPadding + insets.bottom },
+      ]}
     >
       {children}
     </View>

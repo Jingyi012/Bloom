@@ -19,6 +19,7 @@ import { Avatar } from "@/components/Avatar";
 import { useAuth } from "@/auth/AuthProvider";
 import { bloomApi } from "@/api/client";
 import { colors } from "@/styles/tokens";
+import type { CircleMember } from "@/types/api";
 import { circleDetailStyles as styles } from "@/styles/screens/circle-detail.styles";
 import { InlineAlert } from "@/components/InlineAlert";
 import { useSettings } from "@/settings/SettingsProvider";
@@ -77,6 +78,17 @@ export default function CircleDetailScreen() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.circle(circleId!) });
     },
   });
+  const removeMemberMutation = useMutation({
+    mutationFn: (memberUserId: string) => bloomApi.removeCircleMember(session!.accessToken, circleId!, memberUserId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.circle(circleId!) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.circles }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats }),
+      ]);
+    },
+  });
   const leaveMutation = useMutation({
     mutationFn: () => bloomApi.leaveCircle(session!.accessToken, circleId!),
     onSuccess: async () => {
@@ -87,15 +99,27 @@ export default function CircleDetailScreen() {
       ]);
     },
   });
+  const unarchiveMutation = useMutation({
+    mutationFn: () => bloomApi.unarchiveCircle(session!.accessToken, circleId!),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.circle(circleId!) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.circles }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.archivedCircles }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.home }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats }),
+      ]);
+    },
+  });
   const isLoading = detailQuery.isPending;
   const isRefreshing = detailQuery.isFetching && !detailQuery.isPending;
-  const isBusy = inviteMutation.isPending || leaveMutation.isPending;
+  const isBusy = inviteMutation.isPending || leaveMutation.isPending || removeMemberMutation.isPending || unarchiveMutation.isPending;
   const load = useCallback(async () => {
     await detailQuery.refetch();
   }, [detailQuery]);
 
   const openEditSheet = useCallback(() => {
-    if (!detail || detail.circle.status !== "Sealed") return;
+    if (!detail || detail.circle.status !== "Sealed" || detail.circle.isArchivedForCurrentUser) return;
     setEditName(detail.circle.name);
     setEditEmoji(CIRCLE_EMOJIS.includes(detail.circle.emoji as (typeof CIRCLE_EMOJIS)[number]) ? detail.circle.emoji : CIRCLE_EMOJIS[0]);
     setEditBloomAt(new Date(detail.circle.bloomAtUtc));
@@ -131,7 +155,7 @@ export default function CircleDetailScreen() {
   );
 
   const openDeleteSheet = useCallback(() => {
-    if (!detail || !detail.circle.isCreator || detail.circle.status !== "Sealed") return;
+    if (!detail || !detail.circle.isCreator || detail.circle.status !== "Sealed" || detail.circle.isArchivedForCurrentUser) return;
     setDeleteConfirmation("");
     setShowDeleteSheet(true);
   }, [detail]);
@@ -203,6 +227,38 @@ export default function CircleDetailScreen() {
     ]);
   }, [circleId, leaveMutation, router, session?.accessToken, t]);
 
+  const restoreArchive = useCallback(async () => {
+    if (!session?.accessToken || !circleId || !detail?.circle.isArchivedForCurrentUser || unarchiveMutation.isPending) return;
+    setError(null);
+    setNotice(null);
+    try {
+      await unarchiveMutation.mutateAsync();
+      // Always return to the active circles list after restoring, including
+      // when the detail was opened from Profile's archived list.
+      router.replace("/circles");
+    } catch (restoreError) {
+      setError(restoreError instanceof Error ? restoreError.message : t("circleRestoreFailed"));
+    }
+  }, [circleId, detail?.circle.isArchivedForCurrentUser, router, session?.accessToken, t, unarchiveMutation]);
+
+  const removeMember = useCallback((member: CircleMember) => {
+    if (!detail || !detail.circle.isCreator || detail.circle.status !== "Sealed" || member.role === "Creator" || removeMemberMutation.isPending) return;
+    Alert.alert(
+      t("removeMemberTitle"),
+      t("removeMemberBody").replace("{name}", member.displayName),
+      [
+        { text: t("cancel"), style: "cancel" },
+        {
+          text: t("removeMember"),
+          style: "destructive",
+          onPress: () => void removeMemberMutation.mutateAsync(member.userId).catch((removeError) => {
+            setError(removeError instanceof Error ? removeError.message : t("removeMemberFailed"));
+          }),
+        },
+      ],
+    );
+  }, [detail, removeMemberMutation, t]);
+
   if (isLoading)
     return (
       <Screen scroll={false}>
@@ -246,7 +302,7 @@ export default function CircleDetailScreen() {
           <MaterialCommunityIcons color={colors.ink} name="arrow-left" size={19} />
         </Pressable>
         <Text numberOfLines={1} style={styles.topBarTitle}>{circle.name}</Text>
-        {circle.isCreator && circle.status === "Sealed" ? (
+        {circle.isCreator && circle.status === "Sealed" && !circle.isArchivedForCurrentUser ? (
           <Pressable accessibilityRole="button" accessibilityLabel={t("editCircle")} hitSlop={8} onPress={openEditSheet} style={styles.topBarAction}>
             <MaterialCommunityIcons color={colors.sageDark} name="pencil-outline" size={19} />
           </Pressable>
@@ -258,14 +314,14 @@ export default function CircleDetailScreen() {
         <Text style={styles.status}>
           {circle.status === "Bloomed"
             ? t("bloomedStatus")
-            : circle.status === "Archived"
+            : circle.status === "Archived" || circle.isArchivedForCurrentUser
               ? t("archivedStatus")
               : t("sealedStatus")}
         </Text>
         <Text style={styles.bloomDate}>
           {circle.status === "Bloomed"
             ? t("sharedTimelineReady")
-            : circle.status === "Archived"
+            : circle.status === "Archived" || circle.isArchivedForCurrentUser
               ? t("scheduledBloom")
               : t("circleBlooms")}
         </Text>
@@ -275,7 +331,7 @@ export default function CircleDetailScreen() {
           <Text style={styles.heroMetaDot}>·</Text>
           <Text style={styles.heroMetaText}>{t("circleTimezone")}: {circle.timeZoneId}</Text>
         </View>
-        {circle.status !== "Archived" ? (
+        {circle.status !== "Archived" && !circle.isArchivedForCurrentUser ? (
           <>
             <View style={styles.progressTrack}>
               <View
@@ -306,6 +362,9 @@ export default function CircleDetailScreen() {
       {circle.status === "Archived" && showArchivedNotice ? (
         <InlineAlert message={t("archivedReadOnly")} onDismiss={() => setShowArchivedNotice(false)} variant="success" />
       ) : null}
+      {circle.isArchivedForCurrentUser && circle.status !== "Archived" && showArchivedNotice ? (
+        <InlineAlert message={t("personalArchivedReadOnly")} onDismiss={() => setShowArchivedNotice(false)} variant="success" />
+      ) : null}
       <Text style={styles.section}>
         {t("members")} · {members.length}
       </Text>
@@ -326,9 +385,21 @@ export default function CircleDetailScreen() {
               {t("joined")} {formatDate(member.joinedAtUtc)}
             </Text>
           </View>
+          {circle.isCreator && circle.status === "Sealed" && member.role !== "Creator" && !circle.isArchivedForCurrentUser ? (
+            <Pressable
+              accessibilityLabel={`${t("removeMember")} ${member.displayName}`}
+              accessibilityRole="button"
+              disabled={removeMemberMutation.isPending}
+              hitSlop={8}
+              onPress={() => removeMember(member)}
+              style={styles.removeMemberButton}
+            >
+              <MaterialCommunityIcons color={colors.coralDark} name="account-remove-outline" size={19} />
+            </Pressable>
+          ) : null}
         </View>
       ))}
-      {circle.isCreator && circle.status === "Sealed" ? (
+      {circle.isCreator && circle.status === "Sealed" && !circle.isArchivedForCurrentUser ? (
         <View style={styles.form}>
           <TextInput
             accessibilityLabel={t("inviteeEmail")}
@@ -371,6 +442,17 @@ export default function CircleDetailScreen() {
           <Text style={styles.actionText}>{t("openSharedTimeline")}</Text>
         </Pressable>
       ) : null}
+      {circle.isArchivedForCurrentUser ? (
+        <Pressable
+          accessibilityRole="button"
+          disabled={unarchiveMutation.isPending}
+          onPress={() => void restoreArchive()}
+          style={[styles.secondaryAction, unarchiveMutation.isPending ? styles.saveButtonDisabled : null]}
+        >
+          <MaterialCommunityIcons color={colors.sageDark} name="archive-off-outline" size={18} />
+          <Text style={styles.secondaryActionText}>{t("restoreCircle")}</Text>
+        </Pressable>
+      ) : null}
       {circle.canLeave ? (
         <Pressable
           accessibilityRole="button"
@@ -381,7 +463,7 @@ export default function CircleDetailScreen() {
           <Text style={styles.dangerText}>{t("leaveCircle")}</Text>
         </Pressable>
       ) : null}
-      {circle.isCreator && circle.status === "Sealed" ? (
+      {circle.isCreator && circle.status === "Sealed" && !circle.isArchivedForCurrentUser ? (
         <Pressable accessibilityRole="button" disabled={isBusy || deleteMutation.isPending} onPress={openDeleteSheet} style={styles.danger}>
           <Text style={styles.dangerText}>{t("deleteCircle")}</Text>
         </Pressable>

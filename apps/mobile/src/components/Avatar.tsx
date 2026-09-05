@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Image } from "expo-image";
 import { Text, View, type ImageStyle, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { resolveApiUrl } from "@/api/client";
 
 type AvatarProps = {
   uri?: string | null;
@@ -30,7 +31,7 @@ export function Avatar({
           accessibilityLabel={accessibilityLabel}
           contentFit="cover"
           onError={() => setImageFailed(true)}
-          source={{ uri: uri! }}
+          source={{ uri: resolveApiUrl(uri!) }}
           style={imageStyle}
         />
       ) : (
