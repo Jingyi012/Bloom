@@ -197,7 +197,8 @@ GitHub Environment with:
 The workflow only asks for `uat` or `prod`; no version input is required.
 `app.json` supplies the user-facing app version and EAS remotely increments the
 Android `versionCode` for every build. GitHub Release tags and APK filenames are
-generated from both values, for example `mobile-uat-v0.1.0-build.12`. UAT releases
+generated from both values, for example `mobile-v0.1.0-uat.12` and
+`bloom-v0.1.0-uat-12.apk`. UAT releases
 are automatically marked as prereleases, while production releases are marked
 as full releases.
 
