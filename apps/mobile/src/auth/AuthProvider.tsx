@@ -12,8 +12,19 @@ import {
   type PropsWithChildren,
 } from "react";
 import Constants from "expo-constants";
-import { bloomApi, configureSessionRefresh } from "@/api/client";
-import { clearSession, readSession, writeSession } from "@/auth/session";
+import {
+  bloomApi,
+  configureSessionRefresh,
+  getResolvedApiUrl,
+  isSessionRejection,
+} from "@/api/client";
+import {
+  clearSession,
+  readSession,
+  readSessionUser,
+  writeSession,
+  writeSessionUser,
+} from "@/auth/session";
 import type { CurrentUserResponse } from "@/types/api";
 import type { StoredSession } from "@/types/session";
 import { getDeviceTimeZone } from "@/utils/device";
@@ -68,11 +79,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
       await writeSession(nextSession);
       setSession(nextSession);
       return nextSession.accessToken;
-    } catch {
-      await clearSession();
-      queryClient.clear();
-      setSession(null);
-      setUser(null);
+    } catch (refreshError) {
+      // A rebuild can launch before the local API or device network is ready.
+      // Keep the persisted credentials for transient failures and invalidate
+      // them only when the server explicitly rejects the refresh token.
+      if (isSessionRejection(refreshError)) {
+        await clearSession();
+        queryClient.clear();
+        setSession(null);
+        setUser(null);
+      }
       return null;
     }
   }, [queryClient]);
@@ -129,6 +145,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           result.accessToken,
           await bloomApi.me(result.accessToken),
         );
+        await writeSessionUser(nextUser);
         if (!cancelled) {
           setSession(nextSession);
           setUser(nextUser);
@@ -175,7 +192,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [queryClient]);
   const clearError = useCallback(() => setError(null), []);
   const updateUser = useCallback(
-    (nextUser: CurrentUserResponse) => setUser(nextUser),
+    (nextUser: CurrentUserResponse) => {
+      setUser(nextUser);
+      void writeSessionUser(nextUser).catch(() => {
+        // The in-memory profile remains usable if the local cache write fails.
+      });
+    },
     [],
   );
 
@@ -212,37 +234,31 @@ export function useAuth(): AuthContextValue {
 
 async function restoreSession(): Promise<{
   session: StoredSession;
-  user: CurrentUserResponse;
+  user: CurrentUserResponse | null;
 } | null> {
   const stored = await readSession();
   if (!stored) return null;
+  const cachedUser = await readSessionUser();
   try {
+    const remoteUser = await bloomApi.me(stored.accessToken);
+    // The /me request may transparently rotate an expired access token.
+    // Return the newly persisted pair instead of restoring the stale one.
+    const currentSession = (await readSession()) ?? stored;
+    const user = await syncDeviceTimeZone(currentSession.accessToken, remoteUser);
+    await writeSessionUser(user);
     return {
-      session: stored,
-      user: await syncDeviceTimeZone(
-        stored.accessToken,
-        await bloomApi.me(stored.accessToken),
-      ),
+      session: currentSession,
+      user,
     };
-  } catch {
-    try {
-      const refreshed = await bloomApi.refresh(stored.refreshToken);
-      const nextSession = {
-        accessToken: refreshed.accessToken,
-        refreshToken: refreshed.refreshToken,
-      };
-      await writeSession(nextSession);
-      return {
-        session: nextSession,
-        user: await syncDeviceTimeZone(
-          nextSession.accessToken,
-          await bloomApi.me(nextSession.accessToken),
-        ),
-      };
-    } catch {
+  } catch (restoreError) {
+    if (isSessionRejection(restoreError)) {
       await clearSession();
       return null;
     }
+
+    // Preserve the authenticated state while the API is temporarily
+    // unavailable. Subsequent requests can retry and transparently refresh.
+    return { session: stored, user: cachedUser };
   }
 }
 
@@ -269,10 +285,7 @@ export function getApiConfiguration(): {
 } {
   const googleClientIds = getGoogleClientIds();
   return {
-    apiUrl:
-      (Constants.expoConfig?.extra?.apiUrl as string | undefined) ??
-      process.env.EXPO_PUBLIC_API_URL ??
-      "http://127.0.0.1:5052/api/v1",
+    apiUrl: getResolvedApiUrl(),
     googleClientIdConfigured: Boolean(googleClientIds.current),
   };
 }

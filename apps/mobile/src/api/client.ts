@@ -1,4 +1,8 @@
 import Constants from "expo-constants";
+import {
+  mapLocalhostForExpoGo,
+  trimTrailingSlash,
+} from "@/utils/network/localhost";
 import type {
   CircleDetail,
   CircleDeleteResponse,
@@ -25,10 +29,23 @@ import type {
   FriendSummary,
 } from "@/types/api";
 
-const apiUrl =
+const configuredApiUrl =
   (Constants.expoConfig?.extra?.apiUrl as string | undefined) ??
   process.env.EXPO_PUBLIC_API_URL ??
-  "http://127.0.0.1:5052/api/v1";
+  "http://localhost:5052/api/v1";
+const strictBaseUrl =
+  String(process.env.EXPO_PUBLIC_STRICT_BASE_URL).trim().toLowerCase() === "true";
+const apiUrl = strictBaseUrl
+  ? trimTrailingSlash(configuredApiUrl)
+  : mapLocalhostForExpoGo(configuredApiUrl);
+
+if (__DEV__) {
+  console.info("[Bloom][API] base URL:", apiUrl);
+}
+
+export function getResolvedApiUrl(): string {
+  return apiUrl;
+}
 
 /** Resolves API-relative asset references while preserving configured subpaths. */
 export function resolveApiUrl(reference: string): string {
@@ -40,6 +57,23 @@ const API_REQUEST_TIMEOUT_MS = 20_000;
 type SessionRefreshHandler = () => Promise<string | null>;
 let sessionRefreshHandler: SessionRefreshHandler | null = null;
 let sessionRefreshInFlight: Promise<string | null> | null = null;
+
+export class BloomApiError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: number,
+  ) {
+    super(message);
+    this.name = "BloomApiError";
+  }
+}
+
+export function isSessionRejection(error: unknown): boolean {
+  return (
+    error instanceof BloomApiError &&
+    (error.statusCode === 401 || error.statusCode === 403)
+  );
+}
 
 /** Registers the auth provider's refresh callback for transparent 401 recovery. */
 export function configureSessionRefresh(handler: SessionRefreshHandler): () => void {
@@ -90,7 +124,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
 
-  if (!response.ok) throw new Error(await getApiErrorMessage(response));
+  if (!response.ok) {
+    throw new BloomApiError(await getApiErrorMessage(response), response.status);
+  }
 
   return response.status === 204
     ? (undefined as T)
@@ -111,7 +147,9 @@ async function requestMultipart<T>(
       Authorization: `Bearer ${accessToken}`,
     },
   });
-  if (!response.ok) throw new Error(await getApiErrorMessage(response));
+  if (!response.ok) {
+    throw new BloomApiError(await getApiErrorMessage(response), response.status);
+  }
   return response.status === 204
     ? (undefined as T)
     : ((await response.json()) as T);

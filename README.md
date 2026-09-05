@@ -136,17 +136,19 @@ npm run start
 Set these values in `apps/mobile/.env`:
 
 ```text
-EXPO_PUBLIC_API_URL=http://127.0.0.1:5052/api/v1
+EXPO_PUBLIC_API_URL=http://localhost:5052/api/v1
+EXPO_PUBLIC_STRICT_BASE_URL=false
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=...
 EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=...
 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=...
 ```
 
-Use the correct API host for the device:
-
-- iOS simulator: `http://127.0.0.1:5052/api/v1`
-- Android emulator: `http://10.0.2.2:5052/api/v1`
-- Physical phone: use the computer's LAN IP, for example `http://192.168.1.20:5052/api/v1`
+During development, Bloom automatically maps `localhost` to the Expo/Metro
+host. On an Android emulator it falls back to `10.0.2.2`; on a physical phone
+it uses the development computer's LAN address. Set
+`EXPO_PUBLIC_STRICT_BASE_URL=true` only when the configured URL must be used
+exactly as written. If host detection is unavailable on a physical device, set
+`EXPO_PUBLIC_DEV_HOST` to the computer's LAN IP.
 
 The phone and development computer must be on the same network, and the API
 port must be allowed through the computer firewall.
@@ -159,6 +161,11 @@ npm run android
 npm run ios
 npm run web
 ```
+
+`npm run android` first synchronizes the generated Android project and then
+updates the existing development app. It does not intentionally uninstall the
+app, so its saved session is retained. Avoid uninstalling the app or clearing
+its device storage when you want to keep the local sign-in.
 
 Google OAuth must include the app's configured native package/bundle IDs and
 scheme (`com.bestfriends.bloom`). The web client ID must not be used as the
